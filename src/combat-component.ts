@@ -11,6 +11,12 @@ export const Combat = createComponent('Combat', {
   hits: { type: Types.Int32, default: 0 },
   blocks: { type: Types.Int32, default: 0 },
   deflections: { type: Types.Int32, default: 0 },
+  swordAction: { type: Types.String, default: 'Ready' },
+  resolve: { type: Types.Float32, default: 0 },
+  counterTime: { type: Types.Float32, default: 0 },
+  vortexTime: { type: Types.Float32, default: 0 },
+  bossHealth: { type: Types.Float32, default: 360 },
+  bossPhase: { type: Types.String, default: 'Dormant' },
   tutorialStep: { type: Types.Int32, default: 0 },
   gestureLeft: { type: Types.String, default: 'untracked' },
   gestureRight: { type: Types.String, default: 'untracked' },
@@ -19,6 +25,7 @@ export const Combat = createComponent('Combat', {
 });
 
 export const TrainingTarget = createComponent('TrainingTarget', {
+  boss: { type: Types.Boolean, default: false },
   health: { type: Types.Float32, default: 100 },
   radius: { type: Types.Float32, default: 0.36 },
   surface: { type: Types.String, default: 'stone' },

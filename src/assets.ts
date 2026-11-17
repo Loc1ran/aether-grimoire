@@ -1,4 +1,6 @@
 import { AssetType, defineAssets } from '@iwsdk/core';
+import { createSwordGrip } from './scene-assets/sword-grip.scene-asset.js';
+import { createWarden } from './scene-assets/warden.scene-asset.js';
 import { createCandle } from './scene-assets/grimoire.scene-asset.js';
 import { createSword, createTrainingTarget, createArenaWall, createEmitter } from './scene-assets/combat.scene-asset.js';
 import {
@@ -15,6 +17,8 @@ export default defineAssets({
   grimoire: { url: publicAssetUrl('models/aether-codex.glb'), type: AssetType.GLTF },
   candle: createCandle(),
   sword: createSword(),
+  'sword-grip': createSwordGrip(),
+  warden: createWarden(),
   'training-target': createTrainingTarget(),
   'arena-wall': createArenaWall(),
   emitter: createEmitter(),

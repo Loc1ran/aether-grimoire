@@ -1,9 +1,8 @@
 import {
   BufferGeometry, CanvasTexture, Color, DoubleSide, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, Object3D, SRGBColorSpace,
+  MeshStandardMaterial, Object3D, PlaneGeometry, SRGBColorSpace,
 } from '@iwsdk/core';
 import { GRIMOIRES, type MagicAttribute } from './combat-data.js';
-import { flowRibbon } from './scene-assets/lib/magic-surfaces.js';
 import { clockSpell, spellMaterial, tintSpell } from './spell-material.js';
 
 export function leafTurnProgress(time: number, index: number): number {
@@ -23,7 +22,7 @@ export class LivingBook {
   private readonly leafGeometry: BufferGeometry[] = [];
   private readonly leafRest: Float32Array[] = [];
   private readonly wisps: Mesh<BufferGeometry, MeshBasicMaterial>[] = [];
-  private readonly wispGeometry = flowRibbon(0.6, 0.1, 0.5);
+  private readonly wispGeometry = new PlaneGeometry(1,1);
   private readonly tint = new Color();
   private attribute: MagicAttribute = 'shadow';
   private selected = -1;
@@ -59,8 +58,8 @@ export class LivingBook {
     }
     const aura=this.require('Aura');
     for(let i=0;i<10;i++) {
-      const material=spellMaterial(i%3===0?'mist':'ribbon',0);
-      const wisp=new Mesh(this.wispGeometry,material); wisp.name=`FlowingPageInk${i}`;
+      const material=spellMaterial(i<4?'aura':'smoke',0);
+      const wisp=new Mesh(this.wispGeometry,material); wisp.name=i<4?`PageEdgeFlame${i}`:`PageInkPlume${i-4}`;
       aura.add(wisp);this.wisps.push(wisp);
     }
     this.setAttribute('shadow'); this.setPage(0,this.title,this.instruction);
@@ -68,7 +67,7 @@ export class LivingBook {
 
   setAttribute(attribute: MagicAttribute): void {
     this.attribute=attribute; this.tint.setHex(GRIMOIRES[attribute].color);
-    for(let i=0;i<this.wisps.length;i++) tintSpell(this.wisps[i].material,attribute,i%3===0);
+    for(let i=0;i<this.wisps.length;i++) tintSpell(this.wisps[i].material,attribute,i>=4);
     if(this.canvases.length===2) this.paint();
   }
 
@@ -100,13 +99,18 @@ export class LivingBook {
     }
     const speed=this.attribute==='wind'?1.2:this.attribute==='fire'?.9:.48;
     for(let i=0;i<this.wisps.length;i++) {
-      const wisp=this.wisps[i], cycle=(time*speed*.3+i*.173)%1;
-      const a=i*2.399+cycle*(this.attribute==='wind'?4:1), reach=.025+cycle*.09;
-      wisp.position.set(Math.cos(a)*reach,Math.sin(a)*reach*.6,.015+cycle*.14);
-      wisp.rotation.set(Math.sin(a)*.4,Math.cos(a)*.4,a+time*speed*.2);
-      wisp.scale.set(.08+cycle*.1,.065+cycle*.06,.06+cycle*.14);
-      wisp.material.opacity=Math.sin(cycle*Math.PI)*(.08+this.energy*.35)*open*visible;
-      clockSpell(wisp.material,time+i*.2);
+      const wisp=this.wisps[i], side=i%2===0?-1:1;
+      if(i<4) {
+        wisp.position.set(side*.19,0,.024);wisp.rotation.set(i<2?0:Math.PI/2,0,0);
+        wisp.scale.set(.085,i<2?.31:.15,1);
+        wisp.material.opacity=(.52+this.energy*.3)*open*visible;
+      } else {
+        const lift=.055+Math.sin(time*speed+i)*.012;
+        wisp.position.set(side*.18,((i-4)>>1)*.09-.09,lift);
+        wisp.rotation.set(Math.PI/2,side*.2,0);wisp.scale.set(.13,.19+this.energy*.06,1);
+        wisp.material.opacity=(.38+this.energy*.2)*open*visible;
+      }
+      clockSpell(wisp.material,time*speed+i*1.73);
     }
   }
 

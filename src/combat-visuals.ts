@@ -1,15 +1,15 @@
 import {
-  BufferGeometry, CircleGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, RingGeometry, SphereGeometry, Vector3,
+  BufferGeometry, CircleGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, Quaternion, RingGeometry, SphereGeometry, Vector3,
 } from '@iwsdk/core';
 import { GRIMOIRES, type MagicAttribute, type SpellId } from './combat-data.js';
 import { crescentSurface, flowRibbon } from './scene-assets/lib/magic-surfaces.js';
-import { clockSpell, spellMaterial, tintSpell } from './spell-material.js';
+import { clockSpell, spellMaterial, tintSpell, type SpellSurface } from './spell-material.js';
 
 export type Shot = {
   root: Group; core: Mesh; crescent: Mesh; tail: Mesh; material: MeshBasicMaterial;
   previous: Vector3; velocity: Vector3; life: number; enemy: boolean;
   damage: number; power: number; attribute: MagicAttribute; spell: SpellId;
-  wisps: Mesh<BufferGeometry, MeshBasicMaterial>[]; age: number;
+  wisps: Mesh<BufferGeometry, MeshBasicMaterial>[]; edge: Mesh; age: number; aura: boolean; roll: number;
 };
 
 export class CombatVisuals {
@@ -21,6 +21,7 @@ export class CombatVisuals {
   readonly portal: Mesh;
   readonly glyph: Group;
   readonly trail: Mesh[] = [];
+  readonly bladeGlow = new Group();
   private direction = new Vector3();
   private axis = new Vector3(0, 0, 1);
   private up = new Vector3(0, 1, 0);
@@ -35,6 +36,10 @@ export class CombatVisuals {
   private readonly trailPositions = new Float32Array(24*3);
   private readonly membrane = new CircleGeometry(.29,64);
   private time = 0;
+  private readonly smokeCard = new PlaneGeometry(1,1);
+  private readonly auraRotation = new Quaternion();
+  private readonly openingLayers: Mesh<BufferGeometry,MeshBasicMaterial>[] = [];
+  private readonly bladeLayers: Mesh<BufferGeometry,MeshBasicMaterial>[] = [];
 
   constructor() {
     this.root.name = 'CombatEffects';
@@ -50,7 +55,8 @@ export class CombatVisuals {
       root.name = `Projectile${i}`;
       root.visible = false;
       const core = new Mesh(this.dart, material);
-      const crescent = new Mesh(this.ribbon, this.material());
+      const crescent = new Mesh(this.ribbon, this.material(1,'ink'));
+      const edge = new Mesh(this.ribbon, this.material(1,'edge'));edge.name='CuttingAuraEdge';edge.position.z=.003;crescent.add(edge);
       const tail = new Mesh(this.streak, this.material());
       core.name = 'Core';
       crescent.name = 'Crescent';
@@ -65,7 +71,7 @@ export class CombatVisuals {
       this.root.add(root);
       this.shots.push({
         root, core, crescent, tail, material, previous: new Vector3(), velocity: new Vector3(),
-        life: 0, enemy: false, damage: 0, power: 1, attribute: 'shadow', spell: 'bolt', wisps, age: 0,
+        life: 0, enemy: false, damage: 0, power: 1, attribute: 'shadow', spell: 'bolt', wisps, edge, age: 0, aura: false, roll: 0,
       });
     }
     for (let i = 0; i < 2; i++) {
@@ -112,27 +118,36 @@ export class CombatVisuals {
     }
     this.root.add(this.portal);
     this.glyph = new Group();
-    this.glyph.name = 'SummoningGlyph';
+    this.glyph.name = 'LivingInkSummon';
     this.glyph.visible = false;
-    const sealGeometry=new RingGeometry(.97,1,96);
-    for (let i = 0; i < 3; i++) {
-      const circle = new Mesh(sealGeometry, this.material(.7,'sigil'));circle.name=`SummoningCircle${i}`;
-      circle.scale.setScalar(1-i*.19);this.glyph.add(circle);
+    for (let i = 0; i < 24; i++) {
+      const layer=new Mesh(i<8?this.smokeCard:this.streak,this.material(0,i<7?'smoke':i===7?'rift':'ribbon'));
+      layer.name=i<7?`RisingInkPlume${i}`:i===7?'PageGutterRift':`EscapingEmber${i}`;
+      this.openingLayers.push(layer);this.glyph.add(layer);
     }
     this.root.add(this.glyph);
     const uv:number[]=[],indices:number[]=[];
     for(let n=0;n<12;n++){uv.push(n/11,0,n/11,1);if(n<11){const p=n*2;indices.push(p,p+1,p+2,p+1,p+3,p+2);}}
     this.trailGeometry.setAttribute('position',new Float32BufferAttribute(this.trailPositions,3));
     this.trailGeometry.setAttribute('uv',new Float32BufferAttribute(uv,2));this.trailGeometry.setIndex(indices);
-    const trail=new Mesh(this.trailGeometry,this.material(0));trail.name='ContinuousSwordWake';trail.frustumCulled=false;trail.visible=false;
+    const trail=new Mesh(this.trailGeometry,this.material(0,'wake'));trail.name='ContinuousSwordWake';trail.frustumCulled=false;trail.visible=false;
     this.trail.push(trail);this.root.add(trail);
+    this.bladeGlow.name='BladeBoundAura';this.bladeGlow.visible=false;
+    for(let i=0;i<6;i++) {
+      const layer=new Mesh(this.smokeCard,this.material(0,i<3?'smoke':'aura'));
+      layer.name=i<3?`BladeInk${i}`:`BladeFlame${i-3}`;
+      layer.position.set(.018,.47,0);layer.rotation.y=(i%3)*Math.PI/3;
+      layer.scale.set(i<3?.20:.14,i<3?.84:.78,1);
+      this.bladeGlow.add(layer);this.bladeLayers.push(layer);
+    }
+    this.root.add(this.bladeGlow);
   }
 
-  private material(opacity = 1, kind: 'ribbon'|'mist'|'flare'|'sigil' = 'ribbon'): MeshBasicMaterial {
+  private material(opacity = 1, kind: SpellSurface = 'ribbon'): MeshBasicMaterial {
     const material=spellMaterial(kind,opacity);this.materials.push(material);return material;
   }
 
-  launch(position: Vector3, direction: Vector3, speed: number, attribute: MagicAttribute, spell: SpellId, damage: number, power: number, enemy = false): boolean {
+  launch(position: Vector3, direction: Vector3, speed: number, attribute: MagicAttribute, spell: SpellId, damage: number, power: number, enemy = false, aura = false, roll = 0): boolean {
     let shot: Shot | undefined;
     for (const candidate of this.shots) if (candidate.life <= 0) { shot = candidate; break; }
     if (!shot) return false;
@@ -140,7 +155,8 @@ export class CombatVisuals {
     shot.previous.copy(position);
     shot.velocity.copy(direction).normalize().multiplyScalar(speed);
     shot.root.quaternion.setFromUnitVectors(this.axis, this.direction.copy(direction).normalize());
-    shot.life = 4;
+    shot.life = aura?1.2:4;
+    shot.aura=aura;shot.roll=roll;
     shot.enemy = enemy;
     shot.attribute = attribute;
     shot.spell = spell;
@@ -150,12 +166,16 @@ export class CombatVisuals {
     shot.root.visible = true;
     tintSpell(shot.material,enemy?'fire':attribute);
     tintSpell(shot.crescent.material as MeshBasicMaterial,attribute);
+    (shot.crescent.material as MeshBasicMaterial).color.setHex(attribute==='wind'?0x103a2d:0x09060d);
+    tintSpell(shot.edge.material as MeshBasicMaterial,attribute);
+    if(aura && attribute==='shadow')(shot.edge.material as MeshBasicMaterial).color.setHex(0xff364e);
     tintSpell(shot.tail.material as MeshBasicMaterial,attribute);
     const reach = enemy ? 0.07 : spell === 'blast' ? 0.2 : 0.055;
     shot.core.visible = spell !== 'slash';
     shot.core.scale.set(reach,reach,reach*(attribute==='fire'?2.4:1.6));
     shot.crescent.visible = spell === 'slash';
-    shot.crescent.scale.set(.95,.8,1);
+    shot.crescent.scale.set(aura?1.8:.95,aura?1.3:.8,1);
+    shot.crescent.rotation.z=roll;
     shot.tail.scale.set(reach*3,reach*3,spell==='blast'?.85:.55);
     for(let i=0;i<shot.wisps.length;i++) {
       const wisp=shot.wisps[i];tintSpell(wisp.material,attribute,i===0&&attribute==='shadow');
@@ -163,6 +183,53 @@ export class CombatVisuals {
       wisp.position.z=-.08-i*.035;wisp.material.opacity=i===0?.6:.75;
     }
     return true;
+  }
+
+  swordAura(position: Vector3, forward: Vector3, sweep: Vector3, attribute: MagicAttribute): boolean {
+    this.auraRotation.setFromUnitVectors(this.axis,this.direction.copy(forward).normalize()).invert();
+    this.direction.copy(sweep).applyQuaternion(this.auraRotation);
+    // Judge swing direction independently of frame rate; speed/travel are gated by the weapon.
+    if(this.direction.x*this.direction.x+this.direction.y*this.direction.y<=this.direction.lengthSq()*.04)return false;
+    const roll=Math.atan2(this.direction.y,this.direction.x);
+    return this.launch(position,forward,8.5,attribute,'slash',32,2,false,true,roll);
+  }
+
+  bladeAura(sword: Object3D, attribute: MagicAttribute, held: boolean, speed: number): void {
+    this.bladeGlow.visible=held && sword.visible;
+    if(!this.bladeGlow.visible)return;
+    this.bladeGlow.position.copy(sword.position);this.bladeGlow.quaternion.copy(sword.quaternion);
+    for(let i=0;i<this.bladeLayers.length;i++) {
+      const layer=this.bladeLayers[i];tintSpell(layer.material,attribute,i<3);
+      if(attribute==='shadow')layer.material.color.setHex(i<3?0x180d24:0xc288ff);
+      layer.material.opacity=(i<3?.4:.58)+Math.min(speed/15,1)*.16;
+    }
+  }
+
+  bookOpening(book: Object3D, attribute: MagicAttribute, progress: number): void {
+    this.glyph.visible=progress>=0 && progress<1;
+    if(!this.glyph.visible)return;
+    this.glyph.position.copy(book.position);this.glyph.position.y+=.025;
+    const envelope=Math.pow(Math.sin(Math.PI*progress),.75);
+    for(let i=0;i<this.openingLayers.length;i++) {
+      const layer=this.openingLayers[i];
+      tintSpell(layer.material,attribute,i<5);
+      if(i<5)layer.material.color.setHex(attribute==='shadow'?0x17101f:attribute==='fire'?0x55261c:0x234c40);
+      if(i<7) {
+        const side=(i-3)/3, lift=.13+progress*.23;
+        layer.position.set(side*(.055+progress*.04),lift,.035*Math.sin(i*2.4));
+        layer.rotation.set(0,i*.95,side*.35*Math.sin(progress*Math.PI));
+        layer.scale.set(.18+progress*.12,.32+progress*.4,1);layer.material.opacity=envelope*(i<5?.9:.32);
+      } else if(i===7) {
+        layer.position.set(0,.015,0);layer.quaternion.copy(book.quaternion);layer.scale.set(.35,.2,1);
+        layer.material.opacity=envelope*.8;
+      } else {
+        const t=(progress*1.6+i*.137)%1,a=i*2.399;
+        layer.position.set(Math.cos(a)*t*.3,t*.55,Math.sin(a)*t*.18);
+        layer.rotation.set(.5,Math.cos(a),a);layer.scale.set(.018,.012,.045+t*.08);
+        layer.material.opacity=Math.sin(t*Math.PI)*envelope*.85;
+      }
+      clockSpell(layer.material,this.time+i*.37);
+    }
   }
 
   hand(index: number, position: Vector3, direction: Vector3, book: Vector3, attribute: MagicAttribute, charge: number, shield: boolean, time: number): void {
@@ -208,15 +275,20 @@ export class CombatVisuals {
 
   swordTrail(position: Vector3, attribute: MagicAttribute, grip: Vector3): void {
     const trail = this.trail[0];
-    trail.visible = true;
     const material = trail.material as MeshBasicMaterial;
-    material.opacity=.7;tintSpell(material,attribute);
+    material.opacity=.38;tintSpell(material,attribute);
     const positions=this.trailGeometry.attributes.position.array as Float32Array;
+    // A pose jump must start a new wake instead of drawing a screen-wide triangle.
+    if(this.trailReady && Math.hypot(position.x-positions[0],position.y-positions[1],position.z-positions[2])>.24)this.trailReady=false;
+    trail.visible = this.trailReady;
     positions.copyWithin(6,0,positions.length-6);
-    this.direction.lerpVectors(grip,position,.3);
+    this.direction.lerpVectors(grip,position,.72);
     for(let i=0;i<(this.trailReady?1:12);i++) {
       const n=i*6;positions[n]=position.x;positions[n+1]=position.y;positions[n+2]=position.z;
       positions[n+3]=this.direction.x;positions[n+4]=this.direction.y;positions[n+5]=this.direction.z;
+    }
+    for(let n=6;n<positions.length;n+=6) {
+      if(Math.hypot(position.x-positions[n],position.y-positions[n+1],position.z-positions[n+2])>.3)positions.copyWithin(n,n-6,n);
     }
     this.trailGeometry.attributes.position.needsUpdate=true;this.trailReady=true;
   }
@@ -224,6 +296,7 @@ export class CombatVisuals {
   update(delta: number): void {
     this.time+=delta;
     for(const material of this.materials)clockSpell(material,this.time);
+    for(let i=0;i<this.bladeLayers.length;i++)clockSpell(this.bladeLayers[i].material,this.time+(i%3)*1.73);
     for (const shot of this.shots) {
       if (shot.life <= 0) { shot.root.visible = false; continue; }
       shot.previous.copy(shot.root.position);
@@ -231,16 +304,13 @@ export class CombatVisuals {
       shot.life -= delta;
       shot.age+=delta;
       shot.core.rotation.z += delta * (shot.spell === 'blast' ? 3 : 9);
-      shot.crescent.rotation.z = Math.sin(shot.age*3)*.12;
+      shot.crescent.rotation.z = shot.roll+Math.sin(shot.age*3)*.04;
+      (shot.crescent.material as MeshBasicMaterial).opacity=Math.min(1,shot.life*4);
+      (shot.edge.material as MeshBasicMaterial).opacity=Math.min(1,shot.life*5);
       shot.tail.rotation.z += delta*(shot.attribute==='wind'?6:1.2);
       for(let i=0;i<shot.wisps.length;i++) {
         const wisp=shot.wisps[i];wisp.rotation.z+=delta*(shot.attribute==='wind'?5:shot.attribute==='fire'?2:.65)*(i%2?1:-1);
         wisp.material.opacity=(i===0?.5:.8)*Math.min(1,shot.age*14)*Math.min(1,shot.life*6);
-      }
-    }
-    if (this.glyph.visible) {
-      for (let i = 0; i < this.glyph.children.length; i++) {
-        this.glyph.children[i].rotation.z += delta * (.4 + i * .2) * (i === 1 ? -1 : 1);
       }
     }
     if (this.portal.visible) {
@@ -248,7 +318,7 @@ export class CombatVisuals {
     }
     for (const trail of this.trail) {
       const material = trail.material as MeshBasicMaterial;
-      material.opacity = Math.max(0, material.opacity - delta * 2.2);
+      material.opacity = Math.max(0, material.opacity - delta * 3.2);
       trail.visible = material.opacity > 0;
       if(!trail.visible)this.trailReady=false;
     }
@@ -259,9 +329,10 @@ export class CombatVisuals {
     for (const object of this.shields) object.visible = false;
     for (const object of this.charges) object.visible = false;
     for (const beam of this.beams) for (const bead of beam) bead.visible = false;
-    for (const trail of this.trail) trail.visible = false;
+    for (const trail of this.trail) { trail.visible = false; (trail.material as MeshBasicMaterial).opacity=0; }
     this.portal.visible = false;
     this.glyph.visible = false;
+    this.bladeGlow.visible = false;
     this.trailReady = false;
   }
 
@@ -272,7 +343,7 @@ export class CombatVisuals {
     this.ward.dispose();
     this.tear.dispose();
     this.membrane.dispose();this.trailGeometry.dispose();
-    (this.glyph.children[0] as Mesh).geometry.dispose();
+    this.smokeCard.dispose();
     for(const material of this.materials)material.dispose();
   }
 }

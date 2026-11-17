@@ -1,15 +1,14 @@
 import { CatmullRomCurve3, ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Path, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from '@iwsdk/core';
-import { bevelBox, LoftSurface, mirrorGeometryX } from './lib/hardsurface.js';
+import { bevelBox, LoftSurface, sampleRange } from './lib/hardsurface.js';
 import { dartGeometry, wedgeGeometry } from './lib/relic-forms.js';
+import { createKatana } from './katana.scene-asset.js';
 import { relicGrain } from './lib/relic-finish.js';
 
 const stone = new MeshStandardMaterial({ color: '#697373', roughness: 0.88, bumpMap: relicGrain, bumpScale: .012 });
 const ash = new MeshStandardMaterial({ color: '#999b8f', roughness: 0.76, bumpMap: relicGrain, bumpScale: .007 });
-const steel = new MeshStandardMaterial({ color: '#6e8192', metalness: 0.88, roughness: 0.28, bumpMap: relicGrain, bumpScale: .00015 });
 const obsidian = new MeshStandardMaterial({ color: '#101c25', metalness: 0.65, roughness: 0.3 });
 const gold = new MeshStandardMaterial({ color: '#c4a367', metalness: 0.82, roughness: 0.34 });
 const rune = new MeshStandardMaterial({ color: '#ddd7c5', emissive: '#91aab5', emissiveIntensity: .45, roughness: 0.2, metalness: 0.3 });
-const leather = new MeshStandardMaterial({ color: '#241d27', roughness: 0.83, bumpMap: relicGrain, bumpScale: .0006 });
 
 function loftMesh(name: string, geometry: ReturnType<LoftSurface['build']>, material: MeshStandardMaterial): Mesh {
   const mesh = new Mesh(geometry, material);
@@ -17,99 +16,7 @@ function loftMesh(name: string, geometry: ReturnType<LoftSurface['build']>, mate
   return mesh;
 }
 
-/** Grip origin; +Y is the blade, +Z the engraved face. Twelve rigid segments, tip at y=0.84. */
-export function createSword(): Group {
-  const root = new Group();
-  root.name = 'Veilblade';
-
-  const grip = LoftSurface.tube([
-    { z: -0.1, halfW: 0.016, hUp: 0.014, hDown: 0.014, power: 2.4 },
-    { z: -0.04, halfW: 0.023, hUp: 0.019, hDown: 0.019, power: 2.1 },
-    { z: 0.03, halfW: 0.02, hUp: 0.017, hDown: 0.017, power: 2.2 },
-    { z: 0.09, halfW: 0.017, hUp: 0.015, hDown: 0.015, power: 2.6 },
-  ]).build([-0.1, -0.04, 0.03, 0.09], 8, true);
-  grip.rotateX(Math.PI / 2);
-  const gripMesh = loftMesh('Grip', grip, leather);
-  root.add(gripMesh);
-  const wrapPoints: Vector3[]=[];
-  for(let i=0;i<=160;i++) {
-    const t=i/160, a=t*Math.PI*18, radius=.021-Math.abs(t-.5)*.006;
-    wrapPoints.push(new Vector3(Math.cos(a)*radius,-.078+t*.145,Math.sin(a)*radius));
-  }
-  const wrapping=new Mesh(new TubeGeometry(new CatmullRomCurve3(wrapPoints),160,.0017,5,false),leather);
-  wrapping.name='ContinuousLeatherWrap';root.add(wrapping);
-
-  for (const y of [-0.07, 0.055]) {
-    const collar = LoftSurface.tube([
-      { z: -0.008, halfW: 0.026, hUp: 0.022, hDown: 0.022, power: 3 },
-      { z: 0.008, halfW: 0.026, hUp: 0.022, hDown: 0.022, power: 3 },
-    ]).build([-0.008, 0.008], 6, true);
-    collar.rotateX(Math.PI / 2);
-    const band = loftMesh(y < 0 ? 'PommelCollar' : 'GuardCollar', collar, gold);
-    band.position.y = y;
-    root.add(band);
-  }
-
-  const pommel = LoftSurface.tube([
-    { z: 0, halfW: 0.012, hUp: 0.01, hDown: 0.01, power: 2 },
-    { z: 0.028, halfW: 0.032, hUp: 0.024, hDown: 0.02, power: 1.6 },
-    { z: 0.055, halfW: 0.01, hUp: 0.008, hDown: 0.008, power: 2.2 },
-  ]).build([0, 0.028, 0.055], 8, true);
-  pommel.rotateX(-Math.PI / 2);
-  const pommelMesh = loftMesh('Pommel', pommel, gold);
-  pommelMesh.position.y = -0.1;
-  root.add(pommelMesh);
-
-  const guard = new Group();
-  guard.name = 'Guard';
-  guard.position.y = 0.1;
-  const quillon = LoftSurface.blade([
-    { x: 0.02, leadZ: -0.012, trailZ: 0.014, thickUp: 0.016, thickDown: 0.01, power: 1.6 },
-    { x: 0.09, leadZ: -0.012, trailZ: 0.024, thickUp: 0.012, thickDown: 0.009, y: 0.018, power: 1.5 },
-    { x: 0.15, leadZ: -0.008, trailZ: 0.014, thickUp: 0.008, thickDown: 0.006, y: 0.04, power: 2 },
-    { x: 0.2, leadZ: 0.002, trailZ: 0.005, thickUp: 0.002, thickDown: 0.002, y: 0.068, power: 2 },
-  ]).build([0.02,0.04,0.07,0.09,0.12,0.15,0.17,0.2], 12, true);
-  const rightWing = loftMesh('GuardWing1', quillon, gold);
-  const leftWing = loftMesh('GuardWing-1', mirrorGeometryX(quillon.clone()), gold);
-  const jewel = new Mesh(new SphereGeometry(1,20,12), obsidian);
-  jewel.name = 'GuardJewel';
-  jewel.scale.set(0.022, 0.027, 0.012);
-  jewel.position.set(0, 0.01, 0.03);
-  guard.add(rightWing, leftWing, jewel);
-  root.add(guard);
-
-  const blade = new Group();
-  blade.name = 'Blade';
-  const surface = LoftSurface.blade([
-    { x: 0.12, leadZ: -0.031, trailZ: 0.031, thickUp: 0.012, thickDown: 0.012, power: 1.1 },
-    { x: 0.21, leadZ: -0.062, trailZ: 0.062, thickUp: 0.014, thickDown: 0.014, power: 1.05 },
-    { x: 0.4, leadZ: -0.053, trailZ: 0.053, thickUp: 0.012, thickDown: 0.012, power: 1.05 },
-    { x: 0.65, leadZ: -0.035, trailZ: 0.035, thickUp: 0.008, thickDown: 0.008, power: 1.05 },
-    { x: 0.84, leadZ: -0.0005, trailZ: 0.0005, thickUp: 0.0008, thickDown: 0.0008, power: 1 },
-  ]);
-  const fuller=LoftSurface.blade([
-    {x:.12,leadZ:-.007,trailZ:.007,thickUp:.0125,thickDown:.0125,power:1.2},
-    {x:.21,leadZ:-.011,trailZ:.011,thickUp:.0145,thickDown:.0145,power:1.2},
-    {x:.4,leadZ:-.008,trailZ:.008,thickUp:.0125,thickDown:.0125,power:1.2},
-    {x:.65,leadZ:-.004,trailZ:.004,thickUp:.0085,thickDown:.0085,power:1.2},
-    {x:.84,leadZ:-.0001,trailZ:.0001,thickUp:.0009,thickDown:.0009,power:1},
-  ]);
-  for (let i = 0; i < 12; i++) {
-    const segment = new Group();
-    segment.name = `BladeSegment${i}`;
-    const start = 0.12 + i * 0.06;
-    const geometry = surface.build([start, start + 0.03, start + 0.06], 8, { start: i === 0, end: i === 11 });
-    geometry.rotateX(Math.PI / 2);
-    geometry.rotateZ(Math.PI / 2);
-    segment.add(loftMesh(`BladeSteel${i}`, geometry, steel));
-    const inlay=fuller.build([start,start+.03,start+.06],8,{start:i===0,end:i===11});
-    inlay.rotateX(Math.PI/2);inlay.rotateZ(Math.PI/2);
-    segment.add(loftMesh(`RecessedFuller${i}`,inlay,i<2?gold:obsidian));
-    blade.add(segment);
-  }
-  root.add(blade);
-  return root;
-}
+export function createSword(): Group { return createKatana(); }
 
 /** Floor origin. The chest sits at y=1.2 and the face looks along +Z. */
 export function createTrainingTarget(): Group {

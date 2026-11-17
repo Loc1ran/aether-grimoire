@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { segmentSphere, extractionProgress, canDamageSwing, smooth } from '../src/combat-math.ts';
+import { segmentSphere, extractionProgress, canDamageSwing, canEmitSwordAura, smooth } from '../src/combat-math.ts';
 
 assert.equal(segmentSphere(0, 0, 0, 0, 0, -10, 0, 0, -5, 1), 0.4);
 assert.equal(segmentSphere(0, 0, 0, 0, 0, -10, 2, 0, -5, 1), Infinity);
@@ -12,6 +12,10 @@ assert.equal(extractionProgress(1), 1);
 assert.equal(canDamageSwing(10, 0.01, 0), false, 'tracking jitter cannot damage');
 assert.equal(canDamageSwing(2, 0.1, 0.1), false, 'one swing cannot repeatedly hit');
 assert.equal(canDamageSwing(2, 0.1, 0), true);
+assert.equal(canEmitSwordAura(5,.25,0),true);
+assert.equal(canEmitSwordAura(9,.015,0),false,'wrist jitter cannot emit an aura');
+assert.equal(canEmitSwordAura(1,.5,0),false,'slow repositioning cannot emit an aura');
+assert.equal(canEmitSwordAura(5,.4,.1),false,'one swing must respect the aura cooldown');
 assert.equal(smooth(-1), 0);
 assert.equal(smooth(2), 1);
 console.log('PASS: swept collisions, extraction limits, swing jitter/cooldown guards');

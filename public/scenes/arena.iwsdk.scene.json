@@ -2,10 +2,10 @@
   "version": "iwsdk.scene.v1",
   "units": "meters",
   "components": {
-    "com.iwsdk.components.DomeGradient": {"sky": [0.025, 0.018, 0.055, 1], "equator": [0.12, 0.075, 0.16, 1], "ground": [0.028, 0.024, 0.045, 1], "dither": true},
-    "com.iwsdk.components.IBLGradient": {"sky": [0.33, 0.28, 0.45, 1], "equator": [0.24, 0.2, 0.3, 1], "ground": [0.1, 0.08, 0.14, 1], "intensity": 0.9}
+    "com.iwsdk.components.DomeGradient": {"sky": [0.009, 0.019, 0.035, 1], "equator": [0.055, 0.075, 0.09, 1], "ground": [0.015, 0.025, 0.03, 1], "dither": true},
+    "com.iwsdk.components.IBLGradient": {"sky": [0.22, 0.31, 0.39, 1], "equator": [0.2, 0.23, 0.25, 1], "ground": [0.06, 0.06, 0.05, 1], "intensity": 0.8}
   },
-  "environment": {"toneMapping": "aces", "exposure": 1.15, "shadows": true, "shadowMapType": "pcf"},
+  "environment": {"toneMapping": "aces", "exposure": 1, "shadows": true, "shadowMapType": "pcf"},
   "resources": {},
   "authoring": {"views": [
     {"id": "hero", "role": "hero", "projection": "perspective", "position": [0, 1.6, 0.2], "target": [0, 1.4, -2.2], "fov": 70}
@@ -19,7 +19,7 @@
     }},
     {"id": "sword", "name": "Veilblade", "metadata": {"iwsdk.validation": {"allowFloating": true}}, "content": {"type": "asset", "asset": "sword"}, "transform": {"position": [0, 1.12, -0.48]}},
     {"id": "target-close", "name": "Stone Sparring Target", "content": {"type": "asset", "asset": "training-target", "castShadow": true}, "transform": {"position": [0.65, 0, -1.05]}, "components": {"TrainingTarget": {"health": 100, "radius": 0.33, "surface": "stone", "resetAfter": 0}}},
-    {"id": "target-far", "name": "Runic Target", "content": {"type": "asset", "asset": "training-target", "castShadow": true}, "transform": {"position": [0, 0, -2.5]}, "components": {"TrainingTarget": {"health": 100, "radius": 0.33, "surface": "metal", "resetAfter": 0}}},
+    {"id": "target-far", "name": "Obsidian Warden", "content": {"type": "asset", "asset": "warden", "castShadow": true}, "transform": {"position": [0, 0, -2.5]}, "components": {"TrainingTarget": {"boss": true, "health": 360, "radius": 0.43, "surface": "metal", "resetAfter": 0}}},
     {"id": "target-left", "name": "Timber Ward Target", "content": {"type": "asset", "asset": "training-target", "castShadow": true}, "transform": {"position": [-1.7, 0, -2.7]}, "components": {"TrainingTarget": {"health": 100, "radius": 0.33, "surface": "wood", "resetAfter": 0}}},
     {"id": "wall-left", "name": "West Arena Wall", "content": {"type": "asset", "asset": "arena-wall", "receiveShadow": true}, "transform": {"position": [-1.56, 0, -3.905]}},
     {"id": "wall-right", "name": "East Arena Wall", "content": {"type": "asset", "asset": "arena-wall", "receiveShadow": true}, "transform": {"position": [1.56, 0, -3.905]}},
@@ -27,7 +27,9 @@
     {"id": "candle-left", "name": "Left Candle", "content": {"type": "asset", "asset": "candle"}, "transform": {"position": [-0.75, 0, -0.6]}},
     {"id": "candle-right", "name": "Right Candle", "content": {"type": "asset", "asset": "candle"}, "transform": {"position": [0.75, 0, -0.6]}},
     {"id": "prompt-panel", "name": "Training Guide", "content": {"type": "asset", "asset": "prompt-panel"}, "transform": {"position": [-0.95, 1.75, -1.55], "rotationDeg": [0, 24, 0], "scale": [1.2, 1.2, 1.2]}, "components": {"RayInteractable": {}, "PokeInteractable": {}}},
-    {"id": "key-light", "name": "Moonlight", "transform": {"position": [-2, 4, 1], "rotationDeg": [-48, -25, 0]}, "components": {"DirectionalLight": {"color": [0.84, 0.86, 1, 1], "intensity": 2.4, "castShadow": true, "shadowMapSize": "1024", "shadowCameraSize": 5, "shadowCameraNear": 0.2, "shadowCameraFar": 12, "shadowBias": -0.0004, "shadowNormalBias": 0.025}}},
-    {"id": "fill-light", "name": "Warm Arena Fill", "components": {"HemisphereLight": {"skyColor": [0.65, 0.5, 0.8, 1], "groundColor": [0.25, 0.15, 0.1, 1], "intensity": 1.1}}}
+    {"id": "key-light", "name": "Moonlight", "transform": {"position": [-2, 4, 1], "rotationDeg": [-38, -35, 0]}, "components": {"DirectionalLight": {"color": [0.78, 0.88, 1, 1], "intensity": 2, "castShadow": true, "shadowMapSize": "1024", "shadowCameraSize": 5, "shadowCameraNear": 0.2, "shadowCameraFar": 12, "shadowBias": -0.0004, "shadowNormalBias": 0.025}}},
+    {"id": "fill-light", "name": "Quiet Skylight", "components": {"HemisphereLight": {"skyColor": [0.65, 0.7, 0.74, 1], "groundColor": [0.1, 0.12, 0.14, 1], "intensity": 0.35}}},
+    {"id": "rim-light", "name": "Amber Rim", "transform": {"position": [3, 2, -2.5], "rotationDeg": [-20, 150, 0]}, "components": {"DirectionalLight": {"color": [1, 0.65, 0.3, 1], "intensity": 0.9, "castShadow": false}}},
+    {"id": "reading-light", "name": "Parchment Light", "transform": {"position": [-0.6, 1.7, -0.2]}, "components": {"PointLight": {"color": [1, 0.72, 0.37, 1], "intensity": 1.1, "distance": 2.5, "decay": 2, "castShadow": false}}}
   ]
 }

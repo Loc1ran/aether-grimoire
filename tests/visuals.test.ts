@@ -4,6 +4,7 @@ import { Vector3 } from '@iwsdk/core';
 import { leafTurnProgress } from '../src/living-book.js';
 import { CombatVisuals } from '../src/combat-visuals.js';
 import { flowRibbon, crescentSurface } from '../src/scene-assets/lib/magic-surfaces.js';
+import { createSword } from '../src/scene-assets/combat.scene-asset.js';
 
 const glb=readFileSync('public/models/aether-codex.glb');
 assert.equal(glb.toString('utf8',0,4),'glTF');
@@ -23,12 +24,31 @@ for(const geometry of [flowRibbon(),crescentSurface()]) {
   geometry.dispose();
 }
 const effects=new CombatVisuals(), tip=new Vector3(0,1,0), grip=new Vector3();
+const sword=createSword();
+const blade=sword.getObjectByName('BladeSteel') as import('@iwsdk/core').Mesh;
+assert.ok(blade.geometry.attributes.position.count>1000);
+assert.ok([...blade.geometry.attributes.position.array].every(Number.isFinite));
+assert.equal(sword.getObjectByName('BladeSegment0'),undefined,'blade must be continuous, not stacked sections');
+assert.ok(effects.glyph.children.every(child=>!child.name.includes('Circle')));
 for(const attribute of ['shadow','wind','fire'] as const) {
   assert.ok(effects.launch(tip,new Vector3(0,0,-1),8,attribute,'bolt',18,1));
   const shot=effects.shots.find(s=>s.attribute===attribute&&s.life>0)!;
   assert.equal(shot.wisps[1].material.userData.style.value,attribute==='fire'?2:attribute==='wind'?1:0);
 }
 effects.swordTrail(tip,'shadow',grip);tip.x=.2;effects.swordTrail(tip,'shadow',grip);
+tip.x=3;effects.swordTrail(tip,'shadow',grip);
+const wake=effects.trail[0].geometry.attributes.position;
+for(let i=0;i<wake.count;i+=2)assert.equal(wake.getX(i),3,'a tracking jump must not bridge the old and new blade poses');
+for(let step=0;step<20;step++){tip.x+=.1;effects.swordTrail(tip,'shadow',grip);}
+for(let i=0;i<wake.count;i+=2)assert.ok(Math.abs(wake.getX(i)-tip.x)<.301,'wake history must stay close to the current blade');
+sword.position.set(.3,1.2,-.5);sword.rotation.set(.3,.5,.2);sword.visible=true;
+effects.bladeAura(sword,'shadow',true,0);
+assert.ok(effects.bladeGlow.visible,'a resting equipped sword keeps its aura');
+assert.ok(effects.bladeGlow.position.equals(sword.position)&&effects.bladeGlow.quaternion.equals(sword.quaternion),'aura follows the physical blade pose');
+effects.bladeAura(sword,'shadow',false,0);assert.equal(effects.bladeGlow.visible,false,'inserting or storing the blade hides its uncut aura');
+assert.ok(effects.swordAura(tip,new Vector3(0,0,-1),new Vector3(.001,0,0),'shadow'),'high frame rates must not suppress a valid aura');
+assert.ok(effects.swordAura(tip,new Vector3(0,0,-1),new Vector3(.1,0,0),'shadow'));
+assert.equal(effects.swordAura(tip,new Vector3(0,0,-1),new Vector3(0,0,-.1),'shadow'),false,'a straight thrust is not a cutting swing');
 assert.ok([...effects.trail[0].geometry.attributes.position.array].every(Number.isFinite));
-effects.reset();assert.equal(effects.trail[0].visible,false);effects.dispose();
+effects.reset();effects.update(.016);assert.equal(effects.trail[0].visible,false);assert.equal(effects.bladeGlow.visible,false);effects.dispose();
 console.log('PASS embedded codex asset, continuous leaf turns, effect surfaces, distinct spell profiles and sword wake');

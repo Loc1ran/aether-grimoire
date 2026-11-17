@@ -8,11 +8,22 @@ import type { WeaponController } from './weapon-controller.js';
 import { canDamageSwing, segmentSphere } from './combat-math.js';
 import { GRIMOIRES, type MagicAttribute, type SurfaceKind } from './combat-data.js';
 
-type ArenaEvent = 'hit' | 'block' | 'deflect' | 'hurt' | 'shield-break';
-type TargetVisual = { core: Object3D; fragments: Object3D; rest: Float32Array };
+type ArenaEvent = 'hit' | 'block' | 'deflect' | 'counter' | 'hurt' | 'shield-break' | 'victory';
+type TargetVisual = { core: Object3D; fragments: Object3D; rest: Float32Array; position: Vector3; recoil: number };
 
 export class ArenaCombat {
   emitterEnabled = false;
+  bossActive=false;
+  bossHealth=360;
+  bossArmor=100;
+  bossPhase='Dormant';
+  vortexTime=0;
+  readonly vortexCenter=new Vector3();
+  private vortexCooldown=0;
+  private encounterTime=0;
+  private exposedTime=0;
+  private readonly cutNormal=new Vector3();
+  private readonly offset=new Vector3();
   private readonly center = new Vector3();
   private readonly normal = new Vector3();
   private readonly point = new Vector3();
@@ -48,13 +59,17 @@ export class ArenaCombat {
       const fragments = object.getObjectByName('Fragments')!;
       const rest = new Float32Array(fragments.children.length * 3);
       for (let i = 0; i < fragments.children.length; i++) fragments.children[i].position.toArray(rest, i * 3);
-      object.userData.arenaVisual = { core, fragments, rest } satisfies TargetVisual;
+      object.userData.arenaVisual = { core, fragments, rest, position:object.position.clone(), recoil:0 } satisfies TargetVisual;
     }
   }
 
   update(delta: number, head: Vector3, hands: readonly HandIntent[], weapon: WeaponController,
     shieldHealth: number[], attribute: MagicAttribute, active: boolean): void {
     this.swordCooldown = Math.max(0, this.swordCooldown - delta);
+    this.vortexCooldown=Math.max(0,this.vortexCooldown-delta);
+    this.vortexTime=Math.max(0,this.vortexTime-delta);
+    this.encounterTime+=delta;this.exposedTime=Math.max(0,this.exposedTime-delta);
+    if(this.bossActive)this.bossPhase=this.bossHealth<=0?'Defeated':this.exposedTime>0?'Exposed':this.bossHealth<180?'Enraged':'Guarded';
     this.updateTargets(delta);
     if (!active) { this.emitTime = 3; this.wasHeld = false; return; }
     this.updateEmitter(delta, head, attribute);
@@ -65,7 +80,7 @@ export class ArenaCombat {
       this.hitKind = 0; this.hitTime = Infinity; this.hitTarget = undefined; this.shieldIndex = -1;
       this.testEnvironment(shot);
       if (shot.enemy) this.testDefense(shot, head, hands, weapon, shieldHealth);
-      else this.testTargets(shot.previous, shot.root.position, shot.spell === 'blast' ? 0.16 : 0.04);
+      else this.testTargets(shot.previous, shot.root.position, shot.spell === 'slash' ? .18 : shot.spell === 'blast' ? 0.16 : 0.04);
       if (this.hitKind !== 0) this.resolveShot(shot, weapon, shieldHealth, attribute);
     }
     if (held) {
@@ -76,13 +91,48 @@ export class ArenaCombat {
   }
 
   reset(): void {
+    this.bossActive=false;this.bossHealth=360;this.bossArmor=100;this.bossPhase='Dormant';this.vortexTime=this.vortexCooldown=this.exposedTime=0;
     this.emitterEnabled = false; this.emitTime = 3; this.swordCooldown = 0; this.wasHeld = false;
+    this.emitter.visible=true;this.emitter.getWorldPosition(this.origin);
     this.emitterCage.rotation.y = 0; this.emitterHeart.scale.set(0.09, 0.06, 0.12);
     this.visuals.reset();
     for (const entity of this.targets()) this.restoreTarget(entity);
   }
 
+  startBoss():void {
+    this.bossActive=true;this.bossHealth=360;this.bossArmor=100;this.bossPhase='Guarded';this.exposedTime=0;
+    this.emitterEnabled=true;this.emitTime=1.6;
+    this.emitter.visible=false;
+    for(const shot of this.visuals.shots)if(shot.enemy){shot.life=0;shot.root.visible=false;}
+    for(const entity of this.targets())this.restoreTarget(entity);
+  }
+
+  vortex(origin:Vector3,forward:Vector3):boolean {
+    if(this.vortexCooldown>0)return false;
+    this.vortexCenter.copy(origin).addScaledVector(forward,2.1);this.vortexCenter.y=0;
+    this.vortexTime=3;this.vortexCooldown=5;return true;
+  }
+
+  dimensionCut(origin:Vector3,forward:Vector3,sweep:Vector3,ultimate=false,counter=false):number {
+    this.cutNormal.crossVectors(forward,sweep).normalize();
+    if(this.cutNormal.lengthSq()<.5)return 0;
+    let hits=0;
+    for(const entity of this.targets()) {
+      if((entity.getValue(TrainingTarget,'health')??0)<=0)continue;
+      if(entity.getValue(TrainingTarget,'boss')&&!this.bossActive)continue;
+      entity.object3D!.getWorldPosition(this.center);this.center.y+=1.2;
+      this.offset.subVectors(this.center,origin);
+      const distance=this.offset.dot(forward),plane=Math.abs(this.offset.dot(this.cutNormal));
+      const across=this.offset.lengthSq()-distance*distance;
+      if(distance<0||distance>5.5||across>(ultimate?12:6)||plane>(ultimate?.85:.45)+(entity.getValue(TrainingTarget,'radius')??.33))continue;
+      this.point.copy(this.center);this.normal.copy(forward).negate();
+      this.damageTarget(entity,ultimate?220:counter?100:55,'shadow',ultimate?4:3,true,ultimate);hits++;
+    }
+    return hits;
+  }
+
   private updateEmitter(delta: number, head: Vector3, attribute: MagicAttribute): void {
+    if(this.bossActive)for(const entity of this.targets())if(entity.getValue(TrainingTarget,'boss')){entity.object3D!.getWorldPosition(this.origin);this.origin.y+=1.15;this.origin.z+=.2;break;}
     if (!this.emitterEnabled) { this.emitTime = 3; this.emitterHeart.scale.set(0.09, 0.06, 0.12); return; }
     const previous = this.emitTime;
     this.emitTime -= delta;
@@ -95,7 +145,7 @@ export class ArenaCombat {
     if (this.emitTime > 0) return;
     this.direction.copy(head); this.direction.y -= 0.25; this.direction.sub(this.origin).normalize();
     this.visuals.launch(this.origin, this.direction, 1.6, attribute, 'bolt', 1, 1, true);
-    this.audio.play(this.origin, attribute, 'cast'); this.emitTime = 3;
+    this.audio.play(this.origin, attribute, 'cast'); this.emitTime = this.bossActive?(this.bossHealth<180?1.65:2.4):3;
   }
 
   private testEnvironment(shot: Shot): void {
@@ -116,6 +166,7 @@ export class ArenaCombat {
 
   private testTargets(a: Vector3, b: Vector3, radius: number): void {
     for (const entity of this.targets()) {
+      if(entity.getValue(TrainingTarget,'boss') && !this.bossActive)continue;
       if ((entity.getValue(TrainingTarget, 'health') ?? 0) <= 0) continue;
       entity.object3D!.getWorldPosition(this.center); this.center.y += 1.2;
       const t = segmentSphere(a.x, a.y, a.z, b.x, b.y, b.z, this.center.x, this.center.y,
@@ -140,7 +191,7 @@ export class ArenaCombat {
       for (let i = 0; i <= 8; i++) {
         this.bladePoint.lerpVectors(this.sword.position, weapon.tip, i / 8);
         const t = segmentSphere(a.x, a.y, a.z, b.x, b.y, b.z,
-          this.bladePoint.x, this.bladePoint.y, this.bladePoint.z, 0.085);
+          this.bladePoint.x, this.bladePoint.y, this.bladePoint.z, weapon.parryTime>0?.13:.085);
         if (t < this.hitTime) { this.hitTime = t; this.hitKind = 5; }
       }
     }
@@ -167,6 +218,10 @@ export class ArenaCombat {
         this.visuals.shields[index].visible = false; this.onEvent('shield-break');
       } else this.onEvent('block');
     } else if (this.hitKind === 5) {
+      if(weapon.parryTime>0) {
+        weapon.parryTime=0;weapon.counterTime=4;this.impact('shadow','barrier',3,true);this.onEvent('counter');
+        shot.life=0;shot.root.visible=false;return;
+      }
       const deflect = canDamageSwing(weapon.swingSpeed, weapon.swingDistance, 0);
       this.impact(attribute, 'metal', deflect ? 2 : 1);
       this.onEvent(deflect ? 'deflect' : 'block');
@@ -187,6 +242,7 @@ export class ArenaCombat {
   }
 
   private updateSword(weapon: WeaponController, attribute: MagicAttribute): void {
+    if(weapon.attackActive===false)return;
     if (!canDamageSwing(weapon.swingSpeed, weapon.swingDistance, this.swordCooldown)) return;
     this.hitTime = Infinity; this.hitKind = 0; this.hitTarget = undefined;
     for (let i = 1; i <= 8; i++) {
@@ -221,16 +277,24 @@ export class ArenaCombat {
   }
 
   private damageTarget(entity: Entity, damage: number, attribute: MagicAttribute,
-    power: number, slash: boolean): void {
+    power: number, slash: boolean, ignoreArmor=false): void {
+    const boss=entity.getValue(TrainingTarget,'boss');
+    if(boss && !this.bossActive)return;
+    if(boss && this.exposedTime<=0 && !ignoreArmor) {
+      this.bossArmor=Math.max(0,this.bossArmor-damage*.55);damage*=.35;
+      if(this.bossArmor<=0){this.exposedTime=5;this.bossArmor=100;}
+    }
     const health = Math.max(0, (entity.getValue(TrainingTarget, 'health') ?? 100) - damage);
     entity.setValue(TrainingTarget, 'health', health);
+    const visual = entity.object3D!.userData.arenaVisual as TargetVisual;visual.recoil=1;
+    if(boss)this.bossHealth=health;
     const surface = entity.getValue(TrainingTarget, 'surface');
     this.impact(attribute, surface === 'wood' || surface === 'metal' || surface === 'dirt' ||
       surface === 'barrier' ? surface : 'stone', power, slash);
     if (health === 0) {
-      const visual = entity.object3D!.userData.arenaVisual as TargetVisual;
       visual.core.visible = false; visual.fragments.visible = true;
-      entity.setValue(TrainingTarget, 'resetAfter', 4);
+      entity.setValue(TrainingTarget, 'resetAfter', boss?999:4);
+      if(boss){this.bossPhase='Defeated';this.emitterEnabled=false;for(const shot of this.visuals.shots)if(shot.enemy){shot.life=0;shot.root.visible=false;}this.onEvent('victory');}
     }
     this.onEvent('hit');
   }
@@ -242,13 +306,32 @@ export class ArenaCombat {
 
   private updateTargets(delta: number): void {
     for (const entity of this.targets()) {
+      const object=entity.object3D!, visual=object.userData.arenaVisual as TargetVisual;
+      visual.recoil=Math.max(0,visual.recoil-delta*4);
+      visual.core.rotation.x=-Math.sin(visual.recoil*Math.PI)*.18;
+      if(entity.getValue(TrainingTarget,'boss')) {
+        const armor=object.getObjectByName('WardenArmor');
+        if(armor)for(let i=0;i<armor.children.length;i++) {
+          const plate=armor.children[i],side=i<2?-1:1;
+          plate.position.x+=(side*(this.exposedTime>0?.16:0)-plate.position.x)*Math.min(1,delta*8);
+          plate.position.y+=((this.exposedTime>0?-.06:0)-plate.position.y)*Math.min(1,delta*8);
+        }
+      }
+      if(this.vortexTime>0 && (entity.getValue(TrainingTarget,'health')??0)>0 && (!entity.getValue(TrainingTarget,'boss') || this.bossActive)) {
+        this.offset.copy(this.vortexCenter).sub(object.position);this.offset.y=0;
+        if(this.offset.lengthSq()<2.2*2.2) {
+          object.position.addScaledVector(this.offset,Math.min(1,delta*2.5));
+          object.position.y+=(.28+Math.sin(this.encounterTime*6)*.08-object.position.y)*Math.min(1,delta*5);
+          visual.core.rotation.z=Math.sin(this.encounterTime*5)*.12;
+          if(entity.getValue(TrainingTarget,'boss')){this.bossArmor=Math.max(0,this.bossArmor-delta*18);if(this.bossArmor<=0){this.exposedTime=5;this.bossArmor=100;}}
+        }
+      } else {object.position.lerp(visual.position,1-Math.exp(-delta*3));visual.core.rotation.z*=Math.exp(-delta*6);}
       const remaining = entity.getValue(TrainingTarget, 'resetAfter') ?? 0;
       if (remaining <= 0) continue;
-      const next = Math.max(0, remaining - delta);
+      const next = Math.max(entity.getValue(TrainingTarget,'boss')?997.8:0, remaining - delta);
       entity.setValue(TrainingTarget, 'resetAfter', next);
       if (next === 0) { this.restoreTarget(entity); continue; }
-      const visual = entity.object3D!.userData.arenaVisual as TargetVisual;
-      const elapsed = 4 - next, flight = Math.min(elapsed, 1.1);
+      const elapsed = (entity.getValue(TrainingTarget,'boss')?999:4) - next, flight = Math.min(elapsed, 1.1);
       const fade = Math.min(1, next / 0.7);
       for (let i = 0; i < visual.fragments.children.length; i++) {
         const fragment = visual.fragments.children[i], offset = i * 3;
@@ -263,8 +346,9 @@ export class ArenaCombat {
   }
 
   private restoreTarget(entity: Entity): void {
-    entity.setValue(TrainingTarget, 'health', 100); entity.setValue(TrainingTarget, 'resetAfter', 0);
+    entity.setValue(TrainingTarget, 'health', entity.getValue(TrainingTarget,'boss')?360:100); entity.setValue(TrainingTarget, 'resetAfter', 0);
     const visual = entity.object3D!.userData.arenaVisual as TargetVisual;
+    entity.object3D!.position.copy(visual.position);visual.core.rotation.set(0,0,0);visual.recoil=0;
     visual.core.visible = true; visual.fragments.visible = false;
     for (let i = 0; i < visual.fragments.children.length; i++) {
       const fragment = visual.fragments.children[i];

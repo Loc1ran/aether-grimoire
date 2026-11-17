@@ -24,6 +24,10 @@ export function canDamageSwing(speed: number, displacement: number, cooldown: nu
   return speed >= 1.1 && displacement >= 0.065 && cooldown <= 0;
 }
 
+export function canEmitSwordAura(speed: number, displacement: number, cooldown: number): boolean {
+  return speed >= 2.8 && displacement >= 0.24 && cooldown <= 0;
+}
+
 export function smooth(value: number): number {
   const t = Math.max(0, Math.min(1, value));
   return t * t * (3 - 2 * t);

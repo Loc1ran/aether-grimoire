@@ -20,15 +20,20 @@ Use the managed browser's **Runtime** view to play and **Editor** to inspect the
 | Crescent Sever | Hold two fingers for 0.35 seconds, then sweep at least 16 cm. |
 | Prepare sword | Close the whole hand within 23 cm of the pages. Proximity alone does nothing. |
 | Extract sword | Release, close the hand within 14 cm of the visible hilt, and pull outward 55 cm along the aperture. Pulling backward retracts it. |
-| Return sword | Release the grip, preferably near the book. Releasing elsewhere also safely dissolves it back. |
+| Sword aura | Make a firm, full swing to launch a cutting wave forward. Small movements do not fire it. |
+| Return sword | Point the tip down above the pages, enter the opening from the top, and push the blade all the way to the hilt. Partial insertion can be stopped or reversed. |
 
-Each hand owns its action independently. The gripping hand cannot cast; the free hand can. Tracking loss cancels casting and returns the weapon safely. The guide shows detected poses, current spell, mana, extraction progress, and hit/block counts.
+Each hand owns its action independently. The sword hand cannot cast; the free hand can. Relaxing your grip keeps the sword equipped. Tracking loss freezes it and clears swing momentum; it does not store it. The guide shows detected poses, current spell, mana, insertion/extraction progress, and hit/block counts. Dismissal is blocked until the sword has been manually sheathed. Reset explicitly clears the training session.
 
 ## Controllers and desktop preview
 
 Controller trigger prepares/releases a bolt; grip handles the sword. Hold A/X for shield, B/Y for blast, and press/hold the thumbstick for slash. Release the blast/slash button after charging, or sweep for a slash. Hold trigger + grip near the torso for 0.6 seconds to summon/dismiss. Bindings and recognition thresholds are in `src/magic-input.ts`.
 
-Desktop: **G** summon, hold/release **1** bolt, hold **2** shield, hold/release **3** blast, hold/release **4** slash. Aim with the mouse. Press/release **E** to prepare the hilt, press **E** again and drag upward while holding it to extract. Keep **E** held while wielding; move the mouse to swing. **R** returns the weapon. Desktop input runs through the same gameplay state machine but does not validate tracked-hand behavior.
+Desktop: **G** summon, hold/release **1** bolt, hold **2** shield, hold/release **3** blast, hold/release **4** slash. Press/release **E** to prepare the hilt, press **E** again and drag upward while holding it to extract. Release **E** after extraction. **Left click and drag** chooses a horizontal, diagonal, or overhead sword cut; hold for 0.45 seconds before releasing to empower it. **F** performs a quick alternating cut. Moving the mouse alone does not attack. **Right click** raises a counter guard: intercept during its first 0.32 seconds to destroy a spell and empower the next cut. **V** creates Wind Vortex. **Q**, at 100 Resolve, performs Black Divider. **T** starts or restarts the Warden encounter. Hold **R** and drag downward to push the sword into the book. Pressing **R** alone does not store it.
+
+While wielding in VR, swing the actual blade to make a Dimension Cut. The sword hand's **A/X** opens the counter window; the free hand's **thumbstick** casts Wind Vortex; the sword hand's **B/Y** arms Black Divider at 100 Resolve, which releases on the next swing. With tracked hands, pinch the sword hand to counter, show two fingers with the free hand for Vortex, or hold four fingers for 0.6 seconds to arm Divider. Ordinary free-hand casting remains available.
+
+The Obsidian Warden has 360 health and an armor phase. Cuts and the vortex break its armor, creating a five-second damage opening; below half health it attacks faster. Successful hits and timed counters build Resolve. Black Divider bypasses armor. Defeating the Warden stops its attacks and displays victory; the sword remains equipped until manually returned. Desktop attacks have windup, cutting, and recovery phases; damage and signature cuts are enabled only during the cutting phase.
 
 Use **Magic** for Shadow/Wind/Fire variants, **handedness** to move the book to the other side, and **Reset trial** to clear projectiles, marks, damage, mana use, and progress. Existing reading-mode save data is untouched.
 
