@@ -234,12 +234,12 @@ export class CombatSystem extends createSystem({
     const activeSkill = casting || this.skillTime > 0;
     const desktop = !this.world.renderer.xr.isPresenting;
 
-    // Drop the book down when using skills or weapon so the center view is wide open
-    const targetDrop = activeSkill ? (desktop ? 0.38 : 0.42) : (this.weapon.state === 'Held' ? (desktop ? 0.28 : 0.32) : (desktop ? 0.08 : 0));
+    // Drop the book down when using skills (centered horizontally, no side shift)
+    const targetDrop = activeSkill ? (desktop ? 0.48 : 0.44) : (this.weapon.state === 'Held' ? (desktop ? 0.32 : 0.35) : 0);
     this.bookDrop += (targetDrop - this.bookDrop) * (1 - Math.exp(-dt * 6));
 
-    // Smooth lateral movement: tuck book to the left corner (-0.38m) during skills
-    const targetSide = activeSkill ? (desktop ? -0.38 : -0.32) : (this.weapon.state === 'Held' ? (this.dominant === 'right' ? 0.25 : -0.25) : 0);
+    // Keep book centered horizontally when using skills (only offset slightly when wielding katana)
+    const targetSide = this.weapon.state === 'Held' ? (this.dominant === 'right' ? 0.22 : -0.22) : 0;
     this.bookSide += (targetSide - this.bookSide) * (1 - Math.exp(-dt * 6));
 
     if (drawing) return;
