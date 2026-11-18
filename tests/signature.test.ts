@@ -12,12 +12,12 @@ const animator=new DesktopSword(),hand=createHandIntent('right'),head=new Vector
 for(let i=0;i<30;i++)animator.update(.016,hand,head,view,0,0);
 assert.equal(animator.striking,false);
 const readyBlade=new Vector3(0,1,0).applyQuaternion(hand.quaternion);
-assert.ok(readyBlade.y>.96,'ready blade must point vertically up');
+assert.ok(readyBlade.z<-.85,'ready blade must point forward');
 for(let i=0;i<45;i++)animator.update(.016,hand,head,view,-.8,-.5);
 const aimedLeft=new Vector3(0,1,0).applyQuaternion(hand.quaternion);
 for(let i=0;i<45;i++)animator.update(.016,hand,head,view,.8,.5);
 const aimedRight=new Vector3(0,1,0).applyQuaternion(hand.quaternion);
-assert.ok(aimedLeft.y>.94 && aimedRight.y>.94,'mouse movement must not lay the resting blade flat');
+assert.ok(aimedLeft.z<-.75 && aimedRight.z<-.75,'mouse movement must keep resting blade forward');
 assert.equal(animator.striking,false,'aiming the held blade is not an attack');
 animator.press();for(let i=0;i<40;i++)animator.update(.016,hand,head,view,0,0);animator.release(1,0);
 let left=Infinity,right=-Infinity,cutFrames=0,firstTip=0,lastTip=0;

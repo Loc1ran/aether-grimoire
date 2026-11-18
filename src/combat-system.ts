@@ -223,14 +223,15 @@ export class CombatSystem extends createSystem({
 
   private followBook(dt: number): void {
     const drawing = this.weapon.state === 'Preparing' || this.weapon.state === 'Ready' || this.weapon.state === 'Extracting' || this.weapon.state === 'Sheathing';
-    const using = this.weapon.state === 'Held' || this.casts[0].spell !== null || this.casts[1].spell !== null;
+    const casting = this.casts[0].spell !== null || this.casts[1].spell !== null;
+    const using = this.weapon.state === 'Held' || casting;
     const desktop=!this.world.renderer.xr.isPresenting;
-    const targetDrop = using ? (desktop ? .03 : .025) : 0;
+    const targetDrop = casting ? (desktop ? .03 : .26) : using ? (desktop ? .03 : .025) : 0;
     this.bookDrop += (targetDrop - this.bookDrop) * (1 - Math.exp(-dt * 5));
     if (drawing) return;
     this.temp.copy(this.forward); this.temp.y = 0; this.temp.normalize();
     this.desired.copy(this.head).addScaledVector(this.temp, desktop ? .66 : .56);
-    if(this.weapon.state==='Held'||!desktop&&using)this.desired.addScaledVector(this.normal.crossVectors(this.up,this.temp),this.dominant==='right'?.22:-.22);
+    if(this.weapon.state==='Held')this.desired.addScaledVector(this.normal.crossVectors(this.up,this.temp),this.dominant==='right'?.22:-.22);
     const personality = GRIMOIRES[this.attribute].hoverSpeed;
     this.desired.y -= (desktop ? .25 : .22) + this.bookDrop;
     this.desired.y += Math.sin(this.time * personality * 1.7) * 0.01;
