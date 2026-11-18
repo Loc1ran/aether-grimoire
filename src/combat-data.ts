@@ -4,8 +4,8 @@ export type SpellId = 'bolt' | 'shield' | 'slash' | 'blast';
 export type ImpactLevel = 1 | 2 | 3 | 4;
 
 export const GRIMOIRES = {
-  shadow: { name: 'The Umbral Codex', color: 0xb579ff, secondary: 0x40205b, auraIntensity: 0.8, hoverSpeed: 0.8, pageSpeed: 1, pitch: 148 },
-  wind: { name: 'The Verdant Testament', color: 0x91f6c3, secondary: 0x2a7567, auraIntensity: 0.65, hoverSpeed: 1.3, pageSpeed: 1.4, pitch: 392 },
+  shadow: { name: 'The Umbral Codex', color: 0xd0c5ac, secondary: 0x353a43, auraIntensity: 0.8, hoverSpeed: 0.8, pageSpeed: 1, pitch: 148 },
+  wind: { name: 'The Verdant Testament', color: 0xb5c9cf, secondary: 0x455258, auraIntensity: 0.65, hoverSpeed: 1.3, pageSpeed: 1.4, pitch: 392 },
   fire: { name: 'The Cinder Covenant', color: 0xffad4b, secondary: 0xa93724, auraIntensity: 1, hoverSpeed: 1, pageSpeed: 1.15, pitch: 220 },
 } as const;
 

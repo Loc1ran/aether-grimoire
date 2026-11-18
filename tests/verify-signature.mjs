@@ -9,10 +9,11 @@ const bounds=cli('browser','snapshot',{}).result.elements.find(e=>e.role==='canv
 const x=bounds.width/2,y=bounds.height/2,move=(x,y)=>({action:'pointerMove',point:{x,y}});
 if(state().state==='Dormant')input([press('g'),wait(2200)]);
 assert.equal(state().state,'Idle');
+const beforeDraw=state().casts;
 input([move(x,y+200),{action:'keyDown',key:'e'},wait(650),{action:'keyUp',key:'e'},wait(150)]);
 assert.equal(state().weapon,'Ready');
 input([{action:'keyDown',key:'e'},wait(120),move(x,y),wait(400),{action:'keyUp',key:'e'},wait(800)]);
-assert.equal(state().weapon,'Held');assert.equal(state().casts,0,'drawing must not attack');
+assert.equal(state().weapon,'Held');assert.equal(state().casts,beforeDraw,'drawing must not attack');
 cli('browser','screenshot',{},['--output-file','artifacts/combat-ready.png']);
 cli('ecs','pause',{});
 try {

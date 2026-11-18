@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Vector3 } from '@iwsdk/core';
+import { Matrix4, Quaternion, Texture, Vector3 } from '@iwsdk/core';
+import { SmokeVolume } from '../src/smoke-volume.js';
+import { setSmokeTexture } from '../src/spell-material.js';
 import { leafTurnProgress } from '../src/living-book.js';
 import { CombatVisuals } from '../src/combat-visuals.js';
 import { flowRibbon, crescentSurface } from '../src/scene-assets/lib/magic-surfaces.js';
@@ -13,6 +15,17 @@ const names=new Set(doc.nodes.map((node:{name:string})=>node.name));
 for(const name of ['CoverLeft','CoverRight','PageHinge','PageLeft','PageRight','TurningLeaf0','TurningSheet2','Aura','Spine'])assert.ok(names.has(name),`export missing ${name}`);
 assert.ok(!names.has('Cube')&&!doc.cameras?.length,'asset must exclude the Blender starter scene');
 assert.ok(doc.images?.some((image:{bufferView?:number})=>image.bufferView!==undefined),'cover artwork must travel with the model');
+assert.ok(doc.materials.some((m:any)=>m.normalTexture),'the book must retain its leather relief map');
+assert.ok(doc.materials.some((m:any)=>m.name==='Engraved vellum -1'),'illustrated pages must be present in the editor asset');
+const smokeTexture=new Texture();setSmokeTexture(smokeTexture);
+const smoke=new SmokeVolume(2),camera=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),.6),matrix=new Matrix4();
+smoke.setView(camera);smoke.particle(0,1,2,3,.5,0,.25);smoke.particle(1,0,0,0,0,0,0);smoke.commit();
+smoke.mesh.getMatrixAt(0,matrix);assert.ok([...matrix.elements].every(Number.isFinite));
+const smokeRotation=new Quaternion();matrix.decompose(new Vector3(),smokeRotation,new Vector3());
+assert.ok(smokeRotation.angleTo(camera)<.001,'billows must face the viewer when the camera turns');
+assert.equal(smoke.mesh.geometry.attributes.smokeOpacity.getX(0),.25);
+assert.equal(smoke.mesh.geometry.attributes.smokeOpacity.getX(1),0);
+assert.equal(smoke.mesh.material.map,smokeTexture);smoke.dispose();
 for(let leaf=0;leaf<3;leaf++) {
   let previous=0;
   for(let step=0;step<=150;step++) {const p=leafTurnProgress(step/100,leaf);assert.ok(p>=previous&&p<=1,'leaf must turn once without wrapping backwards');previous=p;}
@@ -24,6 +37,9 @@ for(const geometry of [flowRibbon(),crescentSurface()]) {
   geometry.dispose();
 }
 const effects=new CombatVisuals(), tip=new Vector3(0,1,0), grip=new Vector3();
+effects.shots[0].core.geometry.computeBoundingBox();
+const lanceSize=effects.shots[0].core.geometry.boundingBox!.getSize(new Vector3());
+assert.ok(lanceSize.z>lanceSize.x*2,'the casting core must read as an elongated lance');
 const sword=createSword();
 const blade=sword.getObjectByName('BladeSteel') as import('@iwsdk/core').Mesh;
 assert.ok(blade.geometry.attributes.position.count>1000);

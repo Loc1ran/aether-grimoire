@@ -1,6 +1,6 @@
 import {
   AdditiveBlending, BufferGeometry, DoubleSide, Float32BufferAttribute,
-  CircleGeometry, Group, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, RingGeometry, Vector3,
+  CircleGeometry, Group, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, Quaternion, Vector3,
 } from '@iwsdk/core';
 import { wedgeGeometry } from './scene-assets/lib/relic-forms.js';
 import { clockSpell, spellMaterial, tintSpell } from './spell-material.js';
@@ -36,12 +36,13 @@ export class ImpactVFX {
   private nextMark = 0;
   private sequence = 0;
   private lowQuality = false;
+  private readonly view=new Quaternion();
 
   constructor(private readonly root: Group) {
     root.name = 'ImpactEffects';
     root.userData.iwsdkPreviewBounds = 'exclude';
     const sphere = new PlaneGeometry(1,1);
-    const ring = new RingGeometry(.94,1,64);
+    const ring = new PlaneGeometry(1,1);
     const chip = wedgeGeometry();
     const spark = flowRibbon(.1,.02,.09);
     const disc = new CircleGeometry(1,48);
@@ -53,15 +54,15 @@ export class ImpactVFX {
       const group = new Group();
       group.name = `ImpactBurst_${i}`;
       const glow = this.lightMaterial('flare');
-      const waveMat = this.lightMaterial();
+      const waveMat = this.lightMaterial('flare');
       const chipMat = new MeshStandardMaterial({ color: 0x88818c, roughness: 0.9, transparent: true });
       const sparkMat = this.lightMaterial('ribbon');
-      const dustMat = spellMaterial('mist',.2);
+      const dustMat = spellMaterial('smoke',.2);
       this.materials.push(chipMat, dustMat);
       const flash = new Mesh(crystal, glow);
       flash.name = 'ImpactFlash';
       const wave = new Mesh(ring, waveMat);
-      wave.name = 'SurfaceShockwave';
+      wave.name = 'ImpactPressureFlash';
       const debris = new InstancedMesh(chip, chipMat, 12);
       debris.name = 'AnimatedFragments';
       const sparks = new InstancedMesh(spark, sparkMat, 16);
@@ -99,6 +100,7 @@ export class ImpactVFX {
 
   setQuality(quality: 'low' | 'high'): void { this.lowQuality = quality === 'low'; }
   setViewerPosition(position: Vector3): void { this.viewer.copy(position); }
+  setView(rotation:Quaternion):void { this.view.copy(rotation); }
 
   get activeCount(): number {
     let count = 0;
@@ -107,7 +109,7 @@ export class ImpactVFX {
     return count;
   }
 
-  emit(position: Vector3, normal: Vector3, attribute: MagicAttribute, surface: SurfaceKind, power: number, slash = false): void {
+  emit(position: Vector3, normal: Vector3, attribute: MagicAttribute, surface: SurfaceKind, power: number, slash = false, leaveMark = false): void {
     if (!finiteVector(position) || !finiteVector(normal) || normal.lengthSq() < 0.00001) return;
     const profile = IMPACT_PROFILES[surface];
     const magic = GRIMOIRES[attribute];
@@ -140,6 +142,8 @@ export class ImpactVFX {
     burst.debris.count = Math.max(2, Math.floor(profile.debris * settings.density * density));
     burst.sparks.count = Math.max(2, Math.floor(profile.sparks * settings.density * density));
     burst.dust.count = level >= 3 && density > 0.5 ? 4 : 2;
+    this.animateBurst(burst);
+    if(!leaveMark)return;
     const mark = this.marks[this.nextMark++ % (this.lowQuality ? 6 : 12)];
     mark.group.position.copy(position).addScaledVector(this.normal, 0.006);
     mark.group.quaternion.copy(burst.group.quaternion);
@@ -152,11 +156,10 @@ export class ImpactVFX {
     mark.slash.rotation.z = (burst.seed * 1.73) % Math.PI;
     mark.cracks.rotation.z = (burst.seed * 0.37) % Math.PI;
     mark.scorch.visible = !slash;
-    mark.ink.color.setHex(attribute === 'shadow' || surface === 'barrier' ? magic.color : profile.mark);
+    mark.ink.color.setHex(profile.mark);
     mark.burn.color.setHex(attribute === 'fire' ? 0x20100c : profile.mark);
     mark.ink.opacity = 0.9;
     mark.burn.opacity = attribute === 'fire' ? 0.3 : 0.12;
-    this.animateBurst(burst);
   }
 
   update(delta: number): void {
@@ -213,9 +216,9 @@ export class ImpactVFX {
     burst.flash.rotation.z = t * 9;
     burst.glow.opacity = Math.max(0, 1 - t * 7) * 0.85;
     burst.flash.visible = burst.glow.opacity > 0;
-    burst.wave.scale.setScalar(radius * (0.15 + Math.sqrt(fraction) * 1.3));
+    burst.wave.scale.set(radius*(.4+Math.sqrt(fraction)*2),radius*(.12+fraction*.5),1);
     burst.wave.position.z = 0.015 + t * 0.025;
-    burst.waveMat.opacity = Math.max(0,.65-t*2.5);
+    burst.waveMat.opacity = Math.max(0,.25-t*1.6);
     burst.chipMat.opacity = Math.min(1, fade * 4);
     burst.sparkMat.opacity = fade * fade;
     burst.dustMat.opacity = IMPACT_PROFILES[burst.surface].dustOpacity * Math.sin(Math.PI * fraction);
@@ -253,9 +256,8 @@ export class ImpactVFX {
       this.stamp.position.set(Math.cos(angle) * radius * fraction * 0.5, Math.sin(angle) * radius * fraction * 0.5,
         radius * (0.09 + fraction * 0.2));
       if (burst.attribute !== 'wind') this.stamp.position.addScaledVector(burst.gravity, -t * 0.045);
-      this.stamp.rotation.set(0, 0, angle);
-      this.stamp.scale.setScalar(radius * (0.12 + fraction * 0.38));
-      this.stamp.scale.z *= 0.6;
+      this.stamp.quaternion.copy(burst.group.quaternion).invert().multiply(this.view);this.stamp.rotateZ(angle+t*.15);
+      this.stamp.scale.setScalar(radius * (0.35 + fraction * 0.70));
       this.stamp.updateMatrix();
       burst.dust.setMatrixAt(i, this.stamp.matrix);
     }

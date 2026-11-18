@@ -1,13 +1,16 @@
-import { AdditiveBlending, DoubleSide, MeshBasicMaterial, NormalBlending } from '@iwsdk/core';
+import { AdditiveBlending, DoubleSide, MeshBasicMaterial, NormalBlending, type Texture } from '@iwsdk/core';
 import { GRIMOIRES, type MagicAttribute } from './combat-data.js';
 
 /** Soft, moving ink contours on the effect surface; no texture downloads or frame allocations. */
-export type SpellSurface = 'ribbon' | 'mist' | 'flare' | 'sigil' | 'smoke' | 'rift' | 'ink' | 'edge' | 'aura' | 'wake';
+export type SpellSurface = 'ribbon' | 'mist' | 'flare' | 'sigil' | 'smoke' | 'rift' | 'ink' | 'edge' | 'aura' | 'wake' | 'ward';
+let smokeTexture: Texture | undefined;
+export function setSmokeTexture(texture: Texture): void { smokeTexture=texture; }
 export function spellMaterial(kind: SpellSurface, opacity = 1): MeshBasicMaterial {
   const material = new MeshBasicMaterial({
     color: 0xc2b1f1, transparent: true, opacity, depthWrite: false, side: DoubleSide,
     blending: kind === 'mist' || kind === 'smoke' || kind === 'ink' ? NormalBlending : AdditiveBlending, toneMapped: false,
   });
+  if(kind==='smoke' && smokeTexture)material.map=smokeTexture;
   const time = { value: 0 }, style = { value: 0 };
   material.userData.clock = time;
   material.userData.style = style;
@@ -28,7 +31,18 @@ export function spellMaterial(kind: SpellSurface, opacity = 1): MeshBasicMateria
       float flow = sin(p.x * 21.0 - t * 4.5) * sin(p.y * 17.0 + t * 2.0);
       float fine = sin(p.x * 49.0 + p.y * 31.0 - t * 6.0) * 0.12;
       float shape;
-      ${kind === 'aura' ? `
+      ${kind === 'ward' ? `
+        vec2 cells=p*vec2(16.0,8.0), cell=floor(cells), local=fract(cells);
+        float first=3.0,second=3.0;
+        for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++) {
+          vec2 o=vec2(float(x),float(y));
+          vec2 seed=vec2(inkHash(cell+o),inkHash(cell+o+37.0));
+          float d=length(o+seed-local);
+          if(d<first){second=first;first=d;}else{second=min(second,d);}
+        }
+        shape=(.12+.9*(1.0-smoothstep(.008,.035,second-first)))*smoothstep(.02,.2,p.y);
+        shape*=.55+.45*inkFbm(p*6.0+t*.15);
+      ` : kind === 'aura' ? `
         float stream=inkFbm(vec2(p.x*4.0,p.y*7.0-t*1.4));
         float curl=(inkFbm(vec2(p.y*5.0-t*.5,t*.16))-.5)*.22;
         float taper=pow(max(0.0,sin(p.y*3.14159)),.65);
@@ -39,7 +53,7 @@ export function spellMaterial(kind: SpellSurface, opacity = 1): MeshBasicMateria
       ` : kind === 'wake' ? `
         shape=pow(1.0-p.x,2.5)*sin(p.y*3.14159);
         shape*=smoothstep(.15,.65,inkFbm(vec2(p.x*6.0-t*2.0,p.y*4.0)));
-      ` : kind === 'smoke' ? `
+      ` : kind === 'smoke' && material.map ? 'shape = 1.0;' : kind === 'smoke' ? `
         vec2 q=vec2(p.x*3.7,p.y*3.0-t*.65);
         float billow=inkFbm(q+inkFbm(q+t*.08)*1.8);
         float width=(.42-p.y*.3)*(0.65+billow*.7);
@@ -70,7 +84,7 @@ export function spellMaterial(kind: SpellSurface, opacity = 1): MeshBasicMateria
       #include <alphatest_fragment>
     `);
   };
-  material.customProgramCacheKey = () => `aether-${kind}-v2`;
+  material.customProgramCacheKey = () => `aether-${kind}-${!!material.map}-v3`;
   return material;
 }
 

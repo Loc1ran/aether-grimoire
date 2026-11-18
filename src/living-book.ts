@@ -1,9 +1,10 @@
 import {
-  BufferGeometry, CanvasTexture, Color, DoubleSide, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, Object3D, PlaneGeometry, SRGBColorSpace,
+  AssetManager, BufferGeometry, CanvasTexture, Color, DoubleSide, Mesh, MeshBasicMaterial,
+  MeshStandardMaterial, Object3D, PlaneGeometry, PointLight, Quaternion, SRGBColorSpace, Vector3,
 } from '@iwsdk/core';
 import { GRIMOIRES, type MagicAttribute } from './combat-data.js';
 import { clockSpell, spellMaterial, tintSpell } from './spell-material.js';
+import { SmokeVolume } from './smoke-volume.js';
 
 export function leafTurnProgress(time: number, index: number): number {
   const t = Math.max(0, Math.min(1, time - index * 0.14));
@@ -30,8 +31,16 @@ export class LivingBook {
   private instruction = 'Your intent awakens the pages.';
   private turn = 2;
   private energy = 0;
+  private readonly manuscript:CanvasImageSource;
+  private readonly smoke=new SmokeVolume(12,0x68665f);
+  private readonly localView=new Quaternion();
+  private readonly rising=new Vector3();
+  private readonly pageLight=new PointLight(0xe8ba78,0,.65,2);
 
   constructor(private readonly root: Object3D) {
+    const manuscript=AssetManager.getTexture('manuscript');
+    if(!manuscript?.image)throw new Error('The manuscript texture must be loaded before opening the grimoire.');
+    this.manuscript=manuscript.image as CanvasImageSource;
     this.left = this.require('CoverLeft'); this.right = this.require('CoverRight');
     for (const name of ['Control_Next','Control_Prev','Control_Seal','SealRing','Halo',
       'StampEmber','StampGale','StampTide','StampVeil','MoteEmber','MoteGale','MoteTide','MoteVeil']) this.require(name).visible = false;
@@ -45,7 +54,7 @@ export class LivingBook {
       texture.anisotropy = 4; texture.flipY = false;
       // glTF UVs use the top-left image convention.
       material.map = texture; material.color.set(0xffffff); material.roughness = 0.86;
-      material.side = DoubleSide; material.emissive.setHex(0x000000);
+      material.side = DoubleSide; material.emissive.setHex(0x000000);material.bumpMap=texture;material.bumpScale=.00012;
       page.material = material;
       this.materials.push(material); this.pageMaterials.push(material);
       this.canvases.push(ctx); this.textures.push(texture);
@@ -57,9 +66,10 @@ export class LivingBook {
       this.leafRest.push(new Float32Array(sheet.geometry.attributes.position.array));leaf.visible=false;
     }
     const aura=this.require('Aura');
+    aura.add(this.smoke.mesh);this.pageLight.position.set(0,0,.07);aura.add(this.pageLight);
     for(let i=0;i<10;i++) {
-      const material=spellMaterial(i<4?'aura':'smoke',0);
-      const wisp=new Mesh(this.wispGeometry,material); wisp.name=i<4?`PageEdgeFlame${i}`:`PageInkPlume${i-4}`;
+      const material=spellMaterial('flare',0);
+      const wisp=new Mesh(this.wispGeometry,material); wisp.name=`PageEmber${i}`;
       aura.add(wisp);this.wisps.push(wisp);
     }
     this.setAttribute('shadow'); this.setPage(0,this.title,this.instruction);
@@ -77,13 +87,17 @@ export class LivingBook {
     this.selected=page;this.title=title;this.instruction=instruction;this.paint();
   }
 
-  update(delta: number, time: number, reveal: number, opening: number, energized: number): void {
+  update(delta: number, time: number, reveal: number, opening: number, energized: number, view:Quaternion): void {
     const visible=Math.max(0,Math.min(1,reveal)), open=Math.max(0,Math.min(1,opening));
     this.energy+=(energized-this.energy)*(1-Math.exp(-delta*5));
     this.root.visible=visible>.002;
     this.root.scale.setScalar(Math.max(.001,visible*visible*(3-2*visible)));
     const fold=.12+1.45*(1-open);
     this.left.rotation.y=fold; this.right.rotation.y=-fold;
+    this.localView.copy(this.root.getWorldQuaternion(this.localView)).invert();
+    this.rising.set(0,1,0).applyQuaternion(this.localView);this.localView.multiply(view);
+    this.smoke.setView(this.localView);this.smoke.mesh.visible=open>.2;
+    this.pageLight.intensity=(.015+this.energy*.065)*open*visible;
     this.turn=Math.min(2,this.turn+delta*1.55*GRIMOIRES[this.attribute].pageSpeed);
     for(let i=0;i<3;i++) {
       const p=leafTurnProgress(this.turn,i), leaf=this.leaves[i];
@@ -97,21 +111,16 @@ export class LivingBook {
       }
       positions.needsUpdate=true;this.leafGeometry[i].computeVertexNormals();
     }
-    const speed=this.attribute==='wind'?1.2:this.attribute==='fire'?.9:.48;
-    for(let i=0;i<this.wisps.length;i++) {
-      const wisp=this.wisps[i], side=i%2===0?-1:1;
-      if(i<4) {
-        wisp.position.set(side*.19,0,.024);wisp.rotation.set(i<2?0:Math.PI/2,0,0);
-        wisp.scale.set(.085,i<2?.31:.15,1);
-        wisp.material.opacity=(.52+this.energy*.3)*open*visible;
-      } else {
-        const lift=.055+Math.sin(time*speed+i)*.012;
-        wisp.position.set(side*.18,((i-4)>>1)*.09-.09,lift);
-        wisp.rotation.set(Math.PI/2,side*.2,0);wisp.scale.set(.13,.19+this.energy*.06,1);
-        wisp.material.opacity=(.38+this.energy*.2)*open*visible;
-      }
-      clockSpell(wisp.material,time*speed+i*1.73);
+    for(let i=0;i<12;i++) {
+      const t=(time*.23+i/12)%1,angle=i*2.399,timeFade=Math.sin(t*Math.PI);
+      const lift=t*(.1+this.energy*.09),x=Math.cos(angle)*(.06+t*.045),y=Math.sin(angle)*.11;
+      this.smoke.particle(i,x+this.rising.x*lift,y+this.rising.y*lift,.026+this.rising.z*lift,.055+t*.10,i+t*.2,timeFade*(.035+this.energy*.10)*open*visible);
+      if(i>=this.wisps.length)continue;
+      const wisp=this.wisps[i];wisp.position.set(x*.55,y,.03).addScaledVector(this.rising,t*.20);
+      wisp.quaternion.copy(this.localView);wisp.scale.setScalar(.002+this.energy*.003);
+      wisp.material.opacity=timeFade*(.15+this.energy*.45)*open*visible;clockSpell(wisp.material,time);
     }
+    this.smoke.commit();
   }
 
   dispose(): void {
@@ -120,6 +129,7 @@ export class LivingBook {
     for(const geometry of this.leafGeometry)geometry.dispose();
     for(const wisp of this.wisps)wisp.material.dispose();
     this.wispGeometry.dispose();
+    this.smoke.dispose();this.pageLight.dispose();
   }
 
   private require(name: string): Object3D {
@@ -130,44 +140,25 @@ export class LivingBook {
 
   private paint(): void {
     for(let side=0;side<2;side++) {
-      const c=this.canvases[side], paper=c.createRadialGradient(390,480,80,384,512,650);
-      paper.addColorStop(0,'#f3e8ca');paper.addColorStop(.7,'#e3d1a5');paper.addColorStop(1,'#b29a6a');
-      c.fillStyle=paper;c.fillRect(0,0,768,1024);c.globalAlpha=.07;c.fillStyle='#674d2c';
-      for(let i=0;i<1600;i++)c.fillRect((i*137)%768,(i*251)%1024,1+(i%3),1);
-      c.globalAlpha=1;c.strokeStyle='#9d8357';c.lineWidth=1;c.strokeRect(40,42,688,940);c.strokeRect(51,53,666,918);
-      c.textAlign='center';c.fillStyle='#352c29';c.font='small-caps 30px Georgia, serif';
-      c.fillText(side===0?'LIBER · AETHERIS':this.title.toUpperCase(),384,111,590);
-      c.font='14px Georgia, serif';c.fillStyle='#877044';c.fillText(side===0?'THE THREEFOLD TESTAMENT':`ARS ${String(Math.max(1,this.selected)).padStart(2,'0')}  /  ${this.attribute.toUpperCase()}`,384,145);
-      c.save();c.translate(384,side===0?425:395);c.strokeStyle=side===0?'#665137':`#${this.tint.getHexString()}`;
-      for(let ring=0;ring<3;ring++) {c.lineWidth=ring===1?2:1;c.beginPath();c.arc(0,0,138+ring*17,0,Math.PI*2);c.stroke();}
-      for(let i=0;i<24;i++) {
-        c.save();c.rotate(i*Math.PI/12);c.beginPath();c.moveTo(0,-157);c.lineTo(0,-167);c.stroke();
-        if(i%3===0){c.font='18px Georgia';c.fillText(['✦','·','III','V'][i%4],0,-182);}c.restore();
-      }
-      const lobes=this.attribute==='wind'?6:this.attribute==='fire'?3:4;
-      for(let i=0;i<lobes;i++) {
-        c.save();c.rotate(i*Math.PI*2/lobes);c.beginPath();c.moveTo(0,105);
-        c.bezierCurveTo(-110,-35,-55,-140,0,-112);c.bezierCurveTo(55,-140,110,-35,0,105);c.stroke();c.restore();
-      }
-      c.fillStyle='#5d4734';c.beginPath();c.arc(0,0,19,0,Math.PI*2);c.fill();c.restore();
-      c.textAlign='left';c.strokeStyle='#8c7552';c.lineWidth=1.1;c.globalAlpha=.65;
-      for(let row=0;row<8;row++) {
-        const y=650+row*23;
-        for(let col=0;col<19;col++) {
-          const x=102+col*30, n=(row*7+col*11+side*3)%7;
-          c.beginPath();c.moveTo(x,y);c.lineTo(x+4,y-5-n);c.lineTo(x+9,y-3);c.lineTo(x+12,y-8);c.stroke();
-          if(n<3){c.beginPath();c.moveTo(x+3,y-4);c.lineTo(x+11,y-4);c.stroke();}
-        }
-      }
-      c.globalAlpha=1;c.textAlign='center';c.fillStyle='#42382d';c.font='21px Georgia, serif';
+      const c=this.canvases[side];
+      c.clearRect(0,0,768,1024);
+      c.drawImage(this.manuscript,side*768,0,768,1024,0,0,768,1024);
+      const gutter=c.createLinearGradient(side===0?690:0,0,side===0?768:78,0);
+      gutter.addColorStop(0,side===0?'rgba(22,14,8,0)':'rgba(22,14,8,.5)');
+      gutter.addColorStop(1,side===0?'rgba(22,14,8,.5)':'rgba(22,14,8,0)');
+      c.fillStyle=gutter;c.fillRect(side===0?690:0,0,78,1024);
+      c.textAlign='center';c.fillStyle='#392c20';c.font='small-caps 26px Georgia, serif';
+      c.fillText(side===0?'LIBER AETHERIS':this.title.toUpperCase(),384,72,570);
+      c.font='12px Georgia, serif';c.fillStyle='#754d31';
+      c.fillText(side===0?'THE ASHEN TESTAMENT':this.attribute.toUpperCase()+' / '+String(Math.max(1,this.selected)).padStart(2,'0'),384,96);
+      c.fillStyle='#332a21';c.font='20px Georgia, serif';
       const words=(side===0?'What the soul remembers, the hand makes real.':this.instruction).split(/\s+/u);
-      let line='', y=882;
+      let line='',y=930;
       for(const word of words) {
-        const next=line?`${line} ${word}`:word;
-        if(c.measureText(next).width>550&&line){c.fillText(line,384,y);line=word;y+=27;}else line=next;
+        const next=line?line+' '+word:word;
+        if(c.measureText(next).width>560&&line){c.fillText(line,384,y);line=word;y+=25;}else line=next;
       }
-      c.fillText(line,384,y);c.font='16px Georgia, serif';c.fillStyle='#8c7552';
-      c.fillText(side===0?'—  I  —':`—  ${Math.max(1,this.selected+1)}  —`,384,950);this.textures[side].needsUpdate=true;
+      c.fillText(line,384,y);this.textures[side].needsUpdate=true;
     }
   }
 }

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { Group, Mesh, Vector3 } from '@iwsdk/core';
 import { impactDensity, impactLevel, IMPACT_LEVELS, IMPACT_PROFILES, SPELLS } from '../src/combat-data.ts';
+import { ImpactVFX } from '../src/impact-vfx.js';
 
 assert.equal(impactLevel(Number.NaN), 1);
 assert.equal(impactLevel(-10), 1);
@@ -13,4 +15,14 @@ assert.ok(IMPACT_LEVELS[3].radius > IMPACT_LEVELS[0].radius * 4);
 assert.ok(IMPACT_PROFILES.metal.sparks > IMPACT_PROFILES.stone.sparks);
 assert.ok(IMPACT_PROFILES.barrier.markLife < 1);
 assert.ok(SPELLS.blast.cost > SPELLS.bolt.cost && SPELLS.blast.power > SPELLS.bolt.power);
+const root=new Group(),effects=new ImpactVFX(root),position=new Vector3(0,1.3,-2),normal=new Vector3(0,0,1);
+effects.emit(position,normal,'shadow','metal',3,true);
+assert.ok(root.getObjectByName('ImpactBurst_0')!.visible,'enemy hit still produces an impact');
+assert.ok(root.children.filter(c=>c.name.startsWith('SurfaceMark')).every(c=>!c.visible),'enemy hits must not leave floating slash marks');
+effects.emit(position,normal,'shadow','stone',3,true,true);
+const mark=root.getObjectByName('SurfaceMark_0')!;
+assert.ok(mark.visible,'wall and floor hits retain surface scars');
+assert.equal(((mark.getObjectByName('SlashMark') as Mesh).material as any).color.getHex(),IMPACT_PROFILES.stone.mark);
+assert.equal((root.getObjectByName('ImpactPressureFlash') as Mesh).geometry.type,'PlaneGeometry');
+effects.dispose();
 console.log('PASS: impact levels, budgets, surface profiles, and spell scaling');

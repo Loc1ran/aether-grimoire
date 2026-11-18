@@ -1,4 +1,4 @@
-import { createSystem, Entity, Group, Hovered, Object3D, Quaternion, RayInteractable, UIKitMLAsset, Vector3, VisibilityState } from '@iwsdk/core';
+import { AssetManager, createSystem, Entity, Group, Hovered, Object3D, Quaternion, RayInteractable, SRGBColorSpace, UIKitMLAsset, Vector3, VisibilityState } from '@iwsdk/core';
 import { Combat, TrainingTarget } from './combat-component.js';
 import { Grimoire } from './grimoire-component.js';
 import { GRIMOIRES, SPELLS, type MagicAttribute, type SpellId } from './combat-data.js';
@@ -12,6 +12,7 @@ import { ArenaCombat } from './arena-combat.js';
 import { smooth } from './combat-math.js';
 import { DesktopSword } from './desktop-sword.js';
 import { SignatureVFX } from './signature-vfx.js';
+import { setSmokeTexture } from './spell-material.js';
 
 type HandCast = {
   spell: SpellId | null; elapsed: number; cooldown: number; pointGrace: number;
@@ -58,6 +59,7 @@ export class CombatSystem extends createSystem({
   private signatures!: SignatureVFX;
   private readonly desktopSword=new DesktopSword();
   private gripModel!: Object3D;
+  private forearmModel!: Object3D;
   private resolvePower=0;
   private ultimateArmed=false;
   private guarding=false;
@@ -116,6 +118,9 @@ export class CombatSystem extends createSystem({
     if (this.entity || !entity.object3D) return;
     this.entity = entity; this.book = entity.object3D; this.book.visible = false;
     this.controls = new MagicInput(this.world);
+    const smoke=AssetManager.getTexture('smoke-density');
+    if(!smoke)throw new Error('The smoke texture must be loaded before combat starts.');
+    smoke.colorSpace=SRGBColorSpace;setSmokeTexture(smoke);
     this.living = new LivingBook(this.book);
     this.visuals = new CombatVisuals();
     this.world.createTransformEntity(this.visuals.root);
@@ -131,6 +136,7 @@ export class CombatSystem extends createSystem({
       if(event==='aura')this.castSwordSkill();
     });
     this.gripModel=this.weapon.sword.getObjectByName('DesktopGrip')!;
+    this.forearmModel=this.gripModel.getObjectByName('Forearm')!;
     this.arena = new ArenaCombat(this.world, this.visuals, this.impacts, this.audio, () => this.queries.targets.entities, (event) => {
       if (!this.entity) return;
       if (event === 'hit') { this.increment('hits');this.resolvePower=Math.min(100,this.resolvePower+12);if (this.weapon.state === 'Held') this.advance(6); }
@@ -189,6 +195,7 @@ export class CombatSystem extends createSystem({
     // Moving from the desktop draw position to the guard is not a player swing.
     if(desktopDraw && this.weapon.state==='Held')this.weapon.suspend();
     this.gripModel.visible=!immersive && (this.weapon.state==='Held'||this.weapon.state==='Extracting'||this.weapon.state==='Sheathing');
+    if(this.gripModel.visible)this.desktopSword.poseForearm(this.forearmModel,this.weapon.sword,this.head,this.headRotation);
     this.signatures.blade(this.weapon.sword,this.weapon.state==='Held' && this.ultimateArmed);
     this.visuals.bladeAura(this.weapon.sword,this.attribute,this.weapon.state==='Held',this.weapon.swingSpeed);
     if (this.weapon.state === 'Held' && this.weapon.swingSpeed > 1.4) this.visuals.swordTrail(this.weapon.tip, this.attribute, this.hands[this.weapon.holderIndex].position);
@@ -196,7 +203,8 @@ export class CombatSystem extends createSystem({
     this.mana = Math.min(100, this.mana + dt * (this.casts[0].spell || this.casts[1].spell ? 1 : 9));
     const reveal = this.state === 'Dormant' ? 0 : this.state === 'Summoning' ? smooth(this.stateTime / 0.65) : this.state === 'Dismissing' ? 1 - smooth((this.stateTime - 0.25) / 0.6) : 1;
     const opening = this.state === 'Summoning' ? smooth((this.stateTime - 0.4) / 0.7) : this.state === 'Dismissing' ? 1 - smooth(this.stateTime / 0.4) : 1;
-    this.living.update(dt, this.time, reveal, opening, this.casts[0].spell || this.casts[1].spell ? 1 : 0.15);
+    this.living.update(dt, this.time, reveal, opening, this.casts[0].spell || this.casts[1].spell ? 1 : 0.15,this.headRotation);
+    this.signatures.setView(this.headRotation);this.visuals.setView(this.headRotation);this.impacts.setView(this.headRotation);
     this.visuals.bookOpening(this.book,this.attribute,this.state==='Summoning'?this.stateTime/1.25:this.state==='Dismissing'?1-this.stateTime/.85:-1);
     this.visuals.update(dt);
     this.arena.update(dt, this.head, this.hands, this.weapon, this.shieldHealth, this.attribute, active);
@@ -217,14 +225,14 @@ export class CombatSystem extends createSystem({
     const drawing = this.weapon.state === 'Preparing' || this.weapon.state === 'Ready' || this.weapon.state === 'Extracting' || this.weapon.state === 'Sheathing';
     const using = this.weapon.state === 'Held' || this.casts[0].spell !== null || this.casts[1].spell !== null;
     const desktop=!this.world.renderer.xr.isPresenting;
-    const targetDrop = using ? (desktop ? .03 : .34) : 0;
+    const targetDrop = using ? (desktop ? .03 : .025) : 0;
     this.bookDrop += (targetDrop - this.bookDrop) * (1 - Math.exp(-dt * 5));
     if (drawing) return;
     this.temp.copy(this.forward); this.temp.y = 0; this.temp.normalize();
-    this.desired.copy(this.head).addScaledVector(this.temp, desktop ? .66 : .46);
-    if(desktop && this.weapon.state==='Held')this.desired.addScaledVector(this.normal.crossVectors(this.up,this.temp),.22);
+    this.desired.copy(this.head).addScaledVector(this.temp, desktop ? .66 : .56);
+    if(this.weapon.state==='Held'||!desktop&&using)this.desired.addScaledVector(this.normal.crossVectors(this.up,this.temp),this.dominant==='right'?.22:-.22);
     const personality = GRIMOIRES[this.attribute].hoverSpeed;
-    this.desired.y -= (desktop ? .25 : .4) + this.bookDrop;
+    this.desired.y -= (desktop ? .25 : .22) + this.bookDrop;
     this.desired.y += Math.sin(this.time * personality * 1.7) * 0.01;
     this.temp.subVectors(this.desired, this.book.position);
     const distance = this.temp.length();
@@ -333,8 +341,9 @@ export class CombatSystem extends createSystem({
     const ultimate=this.ultimateArmed, counter=this.weapon.counterTime>0;
     if(!ultimate && this.mana<12)return;
     this.temp.copy(this.head);this.temp.y-=.22;
-    this.signatures.cut(this.temp,this.forward,this.weapon.sweepDirection,ultimate);
-    this.arena.dimensionCut(this.temp,this.forward,this.weapon.sweepDirection,ultimate,counter||this.desktopSword.empowered||this.swordCharge>.45);
+    const sweep=!this.world.renderer.xr.isPresenting&&this.desktopSword.verticalAttack?this.desired.set(0,-1,0).applyQuaternion(this.headRotation):this.weapon.sweepDirection;
+    this.signatures.cut(this.temp,this.forward,sweep,ultimate);
+    this.arena.dimensionCut(this.temp,this.forward,sweep,ultimate,counter||this.desktopSword.empowered||this.swordCharge>.45);
     this.weapon.counterTime=0;
     if(ultimate){this.ultimateArmed=false;this.resolvePower=0;}else this.mana-=12;
     this.increment('casts');this.audio.play(this.weapon.tip,'shadow','cast',ultimate?4:2);this.haptic(this.weapon.holderIndex,ultimate?.9:.45,ultimate?180:70);

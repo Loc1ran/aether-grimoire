@@ -6,6 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'public', 'models')
 os.makedirs(OUT, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
+bpy.context.preferences.filepaths.save_version = 0
 scene = bpy.data.scenes.new('Aether Codex Workshop')
 bpy.context.window.scene = scene
 
@@ -33,11 +34,31 @@ def material(name, color, rough=.6, metal=0, image=None):
     return mat
 
 leather = material('Midnight dyed calfskin', (.035,.055,.07), .64, .05, 'codex-cover.png')
-spine_mat = material('Worn indigo binding', (.055,.075,.09), .66)
-gold = material('Antique pale brass', (.58,.4,.17), .32, .78)
-paper = material('Ivory cotton parchment', (.79,.73,.59), .88)
-edge = material('Parchment edges', (.58,.48,.31), .94)
+spine_mat = material('Worn calfskin binding', (.055,.075,.09), .66, 0, 'leather-color.jpg')
+gold = material('Oxidized brass fittings', (.38,.26,.12), .46, .78)
+paper = material('Aged vellum', (.50,.41,.28), .94)
+edge = material('Dust in page edges', (.31,.25,.16), .98)
 ribbon_mat = material('Oxblood silk bookmark', (.22,.024,.045), .38)
+for mat in [leather, spine_mat]:
+    nodes=mat.node_tree.nodes; links=mat.node_tree.links
+    bsdf=next(n for n in nodes if n.type=='BSDF_PRINCIPLED')
+    normal=nodes.new('ShaderNodeTexImage'); normal.image=bpy.data.images.load(os.path.join(ROOT,'public','textures','leather-normal.jpg'))
+    normal.image.colorspace_settings.name='Non-Color'
+    relief=nodes.new('ShaderNodeNormalMap'); relief.inputs['Strength'].default_value=.42
+    links.new(normal.outputs['Color'],relief.inputs['Color']); links.new(relief.outputs['Normal'],bsdf.inputs['Normal'])
+    rough=nodes.new('ShaderNodeTexImage'); rough.image=bpy.data.images.load(os.path.join(ROOT,'public','textures','leather-roughness.jpg'))
+    rough.image.colorspace_settings.name='Non-Color'; links.new(rough.outputs['Color'],bsdf.inputs['Roughness'])
+
+def manuscript(side):
+    mat=material('Engraved vellum '+str(side),(.7,.6,.4),.94,0,'codex-manuscript.png')
+    nodes=mat.node_tree.nodes; links=mat.node_tree.links
+    tex=next(n for n in nodes if n.type=='TEX_IMAGE')
+    uv=nodes.new('ShaderNodeTexCoord'); mapping=nodes.new('ShaderNodeMapping')
+    mapping.inputs['Scale'].default_value=(.5,1,1)
+    mapping.inputs['Location'].default_value=(0 if side<0 else .5,0,0)
+    links.new(uv.outputs['UV'],mapping.inputs['Vector']); links.new(mapping.outputs['Vector'],tex.inputs['Vector'])
+    return mat
+ink_left,ink_right=manuscript(-1),manuscript(1)
 
 def mesh(name, verts, faces, mat, parent, uv=None, bevel=0):
     data = bpy.data.meshes.new(name)
@@ -128,7 +149,7 @@ def page(name,side,z,parent,mat=paper,shorten=0):
             x=side*(.009+u*(.186-shorten))
             y=(v-.5)*(.266-shorten)
             # Bound gutter, lifted shoulder, relaxed outer edge.
-            lift=.009*math.sin(math.pi*u)*math.exp(-u*.9)+.0015*u*u*math.cos(v*math.pi)
+            lift=.012*math.sin(math.pi*u)*math.exp(-u*.9)+.002*u**4*math.sin(v*math.pi*3)+.0025*u**6*math.cos(v*math.pi*5)
             verts.append((x,y,z+lift));uv.append((u if side>0 else 1-u,v))
     for j in range(8):
         for i in range(24):
@@ -139,14 +160,14 @@ def page(name,side,z,parent,mat=paper,shorten=0):
     return ob
 
 for side,parent in [(-1,left),(1,right)]:
-    for layer in range(10):
-        page(('Left' if side<0 else 'Right')+'Gathering'+str(layer),side,-.014+layer*.0019,parent,edge if layer%3==0 else paper,(9-layer)*.0003)
-page('PageLeft',-1,.006,left)
+    for layer in range(18):
+        page(('Left' if side<0 else 'Right')+'Gathering'+str(layer),side,-.014+layer*.00108,parent,edge if layer%4==0 else paper,(17-layer)*.00015)
+page('PageLeft',-1,.006,left,ink_left)
 hinge=group('PageHinge',right)
-page('PageRight',1,.006,hinge)
+page('PageRight',1,.006,hinge,ink_right)
 for i in range(3):
     leaf=group('TurningLeaf'+str(i),right)
-    page('TurningSheet'+str(i),1,.007+i*.0004,leaf)
+    page('TurningSheet'+str(i),1,.007+i*.0004,leaf,ink_right)
 
 points=[]
 for i in range(25):

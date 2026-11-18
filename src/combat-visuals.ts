@@ -4,6 +4,7 @@ import {
 import { GRIMOIRES, type MagicAttribute, type SpellId } from './combat-data.js';
 import { crescentSurface, flowRibbon } from './scene-assets/lib/magic-surfaces.js';
 import { clockSpell, spellMaterial, tintSpell, type SpellSurface } from './spell-material.js';
+import { SmokeVolume } from './smoke-volume.js';
 
 export type Shot = {
   root: Group; core: Mesh; crescent: Mesh; tail: Mesh; material: MeshBasicMaterial;
@@ -40,21 +41,25 @@ export class CombatVisuals {
   private readonly auraRotation = new Quaternion();
   private readonly openingLayers: Mesh<BufferGeometry,MeshBasicMaterial>[] = [];
   private readonly bladeLayers: Mesh<BufferGeometry,MeshBasicMaterial>[] = [];
+  private readonly smoke=new SmokeVolume(100,0x77736c);
+  private readonly view=new Quaternion();
 
   constructor() {
     this.root.name = 'CombatEffects';
-    this.dart = new SphereGeometry(.5,20,12);
-    this.streak = flowRibbon(1.2,.22,.35);
+    this.root.add(this.smoke.mesh);
+    this.dart = flowRibbon(0,0,.26);
+    this.streak = flowRibbon(.12,.035,.08);
     this.ribbon = crescentSurface();
-    this.ward = new RingGeometry(.275,.285,96);this.ward.rotateX(-Math.PI/2);
+    this.ward = new SphereGeometry(.31,40,24,0,Math.PI*2,0,Math.PI/2);
     this.membrane.rotateX(-Math.PI/2);
     this.tear = new CircleGeometry(.12,64);
     for (let i = 0; i < 20; i++) {
       const root = new Group();
-      const material = this.material(1,'flare');
+      const material = this.material(1,'ribbon');
       root.name = `Projectile${i}`;
       root.visible = false;
       const core = new Mesh(this.dart, material);
+      for(let n=1;n<3;n++){const flame=new Mesh(this.dart,material);flame.rotation.z=n*Math.PI/3;core.add(flame);}
       const crescent = new Mesh(this.ribbon, this.material(1,'ink'));
       const edge = new Mesh(this.ribbon, this.material(1,'edge'));edge.name='CuttingAuraEdge';edge.position.z=.003;crescent.add(edge);
       const tail = new Mesh(this.streak, this.material());
@@ -75,10 +80,10 @@ export class CombatVisuals {
       });
     }
     for (let i = 0; i < 2; i++) {
-      const shield = new Mesh(this.ward, this.material(.9,'sigil'));
+      const shield = new Mesh(this.ward, this.material(.48,'ward'));
       shield.name = i ? 'AegisRight' : 'AegisLeft';
       for (let plate = 0; plate < 2; plate++) {
-        const layer = new Mesh(plate===0?this.ward:this.membrane, this.material(plate === 0 ? .65 : .075,plate===0?'sigil':'flare'));
+        const layer = new Mesh(this.ward, this.material(plate === 0 ? .12 : .035,'ward'));
         layer.name = plate === 0 ? 'WardRim' : 'WardInner';
         layer.scale.setScalar(plate === 0 ? .85 : 1);
         layer.position.y = 0.01 + plate * 0.012;
@@ -146,6 +151,7 @@ export class CombatVisuals {
   private material(opacity = 1, kind: SpellSurface = 'ribbon'): MeshBasicMaterial {
     const material=spellMaterial(kind,opacity);this.materials.push(material);return material;
   }
+  setView(rotation:Quaternion):void { this.view.copy(rotation);this.smoke.setView(rotation); }
 
   launch(position: Vector3, direction: Vector3, speed: number, attribute: MagicAttribute, spell: SpellId, damage: number, power: number, enemy = false, aura = false, roll = 0): boolean {
     let shot: Shot | undefined;
@@ -168,15 +174,15 @@ export class CombatVisuals {
     tintSpell(shot.crescent.material as MeshBasicMaterial,attribute);
     (shot.crescent.material as MeshBasicMaterial).color.setHex(attribute==='wind'?0x103a2d:0x09060d);
     tintSpell(shot.edge.material as MeshBasicMaterial,attribute);
-    if(aura && attribute==='shadow')(shot.edge.material as MeshBasicMaterial).color.setHex(0xff364e);
+    if(aura && attribute==='shadow')(shot.edge.material as MeshBasicMaterial).color.setHex(0xd5c2a2);
     tintSpell(shot.tail.material as MeshBasicMaterial,attribute);
     const reach = enemy ? 0.07 : spell === 'blast' ? 0.2 : 0.055;
     shot.core.visible = spell !== 'slash';
-    shot.core.scale.set(reach,reach,reach*(attribute==='fire'?2.4:1.6));
+    shot.core.scale.set(enemy?.18:spell==='blast'?.75:.28,enemy?.18:spell==='blast'?.75:.28,enemy?.25:spell==='blast'?1.35:.55);
     shot.crescent.visible = spell === 'slash';
     shot.crescent.scale.set(aura?1.8:.95,aura?1.3:.8,1);
     shot.crescent.rotation.z=roll;
-    shot.tail.scale.set(reach*3,reach*3,spell==='blast'?.85:.55);
+    shot.tail.scale.set(reach*2,reach*2,spell==='blast'?1.5:.65);
     for(let i=0;i<shot.wisps.length;i++) {
       const wisp=shot.wisps[i];tintSpell(wisp.material,attribute,i===0&&attribute==='shadow');
       wisp.scale.set(reach*(attribute==='wind'?5:3.5),reach*(attribute==='wind'?5:3.5),spell==='blast'?.7:.38);
@@ -200,8 +206,8 @@ export class CombatVisuals {
     this.bladeGlow.position.copy(sword.position);this.bladeGlow.quaternion.copy(sword.quaternion);
     for(let i=0;i<this.bladeLayers.length;i++) {
       const layer=this.bladeLayers[i];tintSpell(layer.material,attribute,i<3);
-      if(attribute==='shadow')layer.material.color.setHex(i<3?0x180d24:0xc288ff);
-      layer.material.opacity=(i<3?.4:.58)+Math.min(speed/15,1)*.16;
+      if(attribute==='shadow')layer.material.color.setHex(i<3?0x393b3c:0xd5c8ac);
+      layer.material.opacity=(i<3?.045:.035)+Math.min(speed/15,1)*.12;
     }
   }
 
@@ -213,12 +219,12 @@ export class CombatVisuals {
     for(let i=0;i<this.openingLayers.length;i++) {
       const layer=this.openingLayers[i];
       tintSpell(layer.material,attribute,i<5);
-      if(i<5)layer.material.color.setHex(attribute==='shadow'?0x17101f:attribute==='fire'?0x55261c:0x234c40);
+      if(i<5)layer.material.color.setHex(attribute==='shadow'?0x70716b:attribute==='fire'?0x68574b:0x88918e);
       if(i<7) {
         const side=(i-3)/3, lift=.13+progress*.23;
         layer.position.set(side*(.055+progress*.04),lift,.035*Math.sin(i*2.4));
-        layer.rotation.set(0,i*.95,side*.35*Math.sin(progress*Math.PI));
-        layer.scale.set(.18+progress*.12,.32+progress*.4,1);layer.material.opacity=envelope*(i<5?.9:.32);
+        layer.quaternion.copy(this.view);layer.rotateZ(i*.87+progress*.14);
+        layer.scale.setScalar(.14+progress*.27);layer.material.opacity=envelope*(i<5?.18:.08);
       } else if(i===7) {
         layer.position.set(0,.015,0);layer.quaternion.copy(book.quaternion);layer.scale.set(.35,.2,1);
         layer.material.opacity=envelope*.8;
@@ -238,7 +244,7 @@ export class CombatVisuals {
     orb.position.copy(position).addScaledVector(direction, 0.08);
     orb.quaternion.setFromUnitVectors(this.axis, direction);
     const amount = Math.min(1, charge);
-    orb.scale.set(0.03 + amount * 0.05, 0.02 + amount * 0.035, 0.05 + amount * 0.16);
+    orb.scale.set(.09+amount*.11,.09+amount*.11,.10+amount*.22);
     tintSpell(orb.material as MeshBasicMaterial,attribute);
     for(let i=0;i<orb.children.length;i++) {
       const coil=orb.children[i] as Mesh<BufferGeometry,MeshBasicMaterial>;
@@ -297,7 +303,15 @@ export class CombatVisuals {
     this.time+=delta;
     for(const material of this.materials)clockSpell(material,this.time);
     for(let i=0;i<this.bladeLayers.length;i++)clockSpell(this.bladeLayers[i].material,this.time+(i%3)*1.73);
-    for (const shot of this.shots) {
+    for (let index=0;index<this.shots.length;index++) {
+      const shot=this.shots[index];
+      this.direction.copy(shot.velocity).normalize();
+      for(let i=0;i<5;i++) {
+        const t=(this.time*2.5+i*.2)%1,length=shot.spell==='blast'?1.5:.65,angle=i*2.399+this.time;
+        this.smoke.particle(index*5+i,shot.root.position.x-this.direction.x*t*length+Math.cos(angle)*t*.04,
+          shot.root.position.y-this.direction.y*t*length+t*.13,shot.root.position.z-this.direction.z*t*length,
+          (.05+t*.24)*(shot.spell==='blast'?1.7:1),angle*.15,shot.life>0?Math.sin(t*Math.PI)*.20:0);
+      }
       if (shot.life <= 0) { shot.root.visible = false; continue; }
       shot.previous.copy(shot.root.position);
       shot.root.position.addScaledVector(shot.velocity, delta);
@@ -313,6 +327,7 @@ export class CombatVisuals {
         wisp.material.opacity=(i===0?.5:.8)*Math.min(1,shot.age*14)*Math.min(1,shot.life*6);
       }
     }
+    this.smoke.commit();
     if (this.portal.visible) {
       for (const fang of this.portal.children) fang.rotation.y += delta * 2.4;
     }
@@ -334,6 +349,7 @@ export class CombatVisuals {
     this.glyph.visible = false;
     this.bladeGlow.visible = false;
     this.trailReady = false;
+    for(let i=0;i<100;i++)this.smoke.particle(i,0,0,0,0,0,0);this.smoke.commit();
   }
 
   dispose(): void {
@@ -344,6 +360,7 @@ export class CombatVisuals {
     this.tear.dispose();
     this.membrane.dispose();this.trailGeometry.dispose();
     this.smokeCard.dispose();
+    this.smoke.dispose();
     for(const material of this.materials)material.dispose();
   }
 }

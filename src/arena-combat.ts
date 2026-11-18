@@ -237,7 +237,7 @@ export class ArenaCombat {
       }
     } else if (this.hitKind === 6) {
       this.impact(attribute, 'barrier', 1); this.onEvent('hurt');
-    } else this.impact(shot.attribute, 'stone', shot.power, shot.spell === 'slash');
+    } else this.impact(shot.attribute, 'stone', shot.power, shot.spell === 'slash',true);
     shot.life = 0; shot.root.visible = false;
   }
 
@@ -265,13 +265,13 @@ export class ArenaCombat {
       const t = a.y / (a.y - b.y);
       this.point.lerpVectors(a, b, t);
       if (Math.abs(this.point.x) <= 4 && Math.abs(this.point.z) <= 4) {
-        this.normal.set(0, 1, 0); this.impact(attribute, 'stone', 2, true); this.swordCooldown = 0.25;
+        this.normal.set(0, 1, 0); this.impact(attribute, 'stone', 2, true,true); this.swordCooldown = 0.25;
       }
     } else if (a.z > -3.8 && b.z <= -3.8) {
       const t = (-3.8 - a.z) / (b.z - a.z);
       this.point.lerpVectors(a, b, t);
       if (Math.abs(this.point.x) <= 3.2 && this.point.y >= 0 && this.point.y <= 2.86) {
-        this.normal.set(0, 0, 1); this.impact(attribute, 'stone', 2, true); this.swordCooldown = 0.25;
+        this.normal.set(0, 0, 1); this.impact(attribute, 'stone', 2, true,true); this.swordCooldown = 0.25;
       }
     }
   }
@@ -299,8 +299,8 @@ export class ArenaCombat {
     this.onEvent('hit');
   }
 
-  private impact(attribute: MagicAttribute, surface: SurfaceKind, power: number, slash = false): void {
-    this.impacts.emit(this.point, this.normal, attribute, surface, power, slash);
+  private impact(attribute: MagicAttribute, surface: SurfaceKind, power: number, slash = false, leaveMark=false): void {
+    this.impacts.emit(this.point, this.normal, attribute, surface, power, slash,leaveMark);
     this.audio.play(this.point, attribute, 'impact', power, surface);
   }
 

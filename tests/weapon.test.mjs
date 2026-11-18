@@ -64,6 +64,10 @@ assert.equal(w.state,'Sheathing','a gentle downward insertion must work at high 
 enter();hand.tracked=false;w.update(.02,hands,true);
 hand.position.y=w.portalPosition.y+.12;hand.tracked=true;w.update(.02,hands,true);
 assert.equal(w.state,'Held','recovered tracking cannot teleport a partly inserted blade into storage');
+above();hand.position.y-=.35;w.update(.05,hands,true);
+assert.equal(w.state,'Sheathing','a fast downward push crossing the page between frames must enter');
+assert.ok(w.progress>0&&w.progress<1,'fast partial insertion must not automatically finish');
+above();assert.equal(w.state,'Held');
 enter();for(let i=0;i<35;i++){hand.position.y-=.02;w.update(.02,hands,true);}
 assert.equal(w.state,'Stored','only pushing the blade to its hilt stores it');
 assert.equal(w.holderIndex,-1);assert.equal(sword.visible,false);

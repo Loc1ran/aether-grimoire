@@ -119,7 +119,8 @@ export class WeaponController {
     if(this.state==='Held') {
       if(!downward || radial>.13 || height>.4)this.aboveSlot=false;
       if(downward && radial<.085 && height>.025 && height<.3)this.aboveSlot=true;
-      if(hadTip && this.aboveSlot && downward && radial<.085 && height<=.01 && height>-.09 && this.tip.y<this.previousTip.y-.000001) {
+      // A fast push can cross the whole page plane between two frames.
+      if(hadTip && this.aboveSlot && downward && radial<.085 && height<=.01 && this.tip.y<this.previousTip.y-.000001) {
         this.state='Sheathing';this.setClipping(true);this.visuals.portal.visible=true;this.swingDistance=0;
       }
     }

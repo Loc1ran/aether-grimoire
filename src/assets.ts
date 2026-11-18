@@ -15,6 +15,8 @@ export default defineAssets({
   'scriptorium-floor': createScriptoriumFloor(),
   'floor-ring': createFloorRing(),
   grimoire: { url: publicAssetUrl('models/aether-codex.glb'), type: AssetType.GLTF },
+  manuscript: { url: publicAssetUrl('textures/codex-manuscript.png'), type: AssetType.Texture, priority: 'critical' },
+  'smoke-density': { url: publicAssetUrl('textures/smoke-density.png'), type: AssetType.Texture, priority: 'critical' },
   candle: createCandle(),
   sword: createSword(),
   'sword-grip': createSwordGrip(),
