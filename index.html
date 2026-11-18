@@ -8,9 +8,107 @@
     />
     <link rel="icon" href="data:," />
     <title>Aether Grimoire</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        user-select: none;
+      }
+      #scene-container {
+        width: 100vw;
+        height: 100vh;
+      }
+      #desktop-instructions {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(16, 14, 28, 0.92);
+        border: 1px solid rgba(159, 122, 199, 0.45);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 10px 20px;
+        color: #e3dbe8;
+        font-size: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        z-index: 100;
+        pointer-events: auto;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+      .instruction-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 14px;
+        justify-content: center;
+      }
+      .instruction-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+      .key-badge {
+        background: #2a2238;
+        color: #ffdb78;
+        border: 1px solid #5a4575;
+        border-radius: 4px;
+        padding: 2px 7px;
+        font-size: 11px;
+        font-weight: 700;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+      #toggle-instructions {
+        position: fixed;
+        top: 14px;
+        right: 14px;
+        background: rgba(22, 18, 38, 0.88);
+        border: 1px solid rgba(159, 122, 199, 0.5);
+        border-radius: 8px;
+        color: #f3e9dc;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        z-index: 101;
+        backdrop-filter: blur(6px);
+      }
+      #toggle-instructions:hover {
+        background: rgba(45, 34, 65, 0.95);
+        border-color: #c5a8f5;
+      }
+      .hidden {
+        display: none !important;
+      }
+    </style>
   </head>
-  <body style="margin: 0">
+  <body>
     <div id="scene-container"></div>
+    <button id="toggle-instructions" onclick="document.getElementById('desktop-instructions').classList.toggle('hidden')">
+      📖 Controls Guide
+    </button>
+    <div id="desktop-instructions">
+      <div class="instruction-row">
+        <span class="instruction-item"><span class="key-badge">G</span> Summon / Dismiss</span>
+        <span class="instruction-item"><span class="key-badge">1</span> Rune Bolt</span>
+        <span class="instruction-item"><span class="key-badge">2</span> Aegis Shield</span>
+        <span class="instruction-item"><span class="key-badge">3</span> Astral Blast</span>
+        <span class="instruction-item"><span class="key-badge">4</span> Crescent Sever</span>
+        <span class="instruction-item"><span class="key-badge">T</span> Start Boss</span>
+      </div>
+      <div class="instruction-row">
+        <span class="instruction-item"><span class="key-badge">E</span> Draw Katana</span>
+        <span class="instruction-item"><span class="key-badge">R</span> Sheathe Katana</span>
+        <span class="instruction-item"><span class="key-badge">Click / F</span> Sword Cut</span>
+        <span class="instruction-item"><span class="key-badge">Right Click</span> Counter Guard</span>
+        <span class="instruction-item"><span class="key-badge">V</span> Wind Vortex</span>
+        <span class="instruction-item"><span class="key-badge">Q</span> Black Divider</span>
+      </div>
+    </div>
     <script type="module" src="/src/index.ts"></script>
   </body>
 </html>

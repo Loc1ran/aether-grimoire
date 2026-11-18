@@ -453,7 +453,7 @@ export class CombatSystem extends createSystem({
     this.label('boss-fill')?.setProperties({width:`${Math.max(0,this.arena.bossHealth/3.6)}%`});
     this.label('boss')?.setProperties({text:this.arena.bossPhase==='Dormant'?'OBSIDIAN WARDEN / Start trial':this.arena.bossPhase==='Defeated'?'VICTORY / WARDEN DEFEATED':`WARDEN ${Math.ceil(this.arena.bossHealth)} / 360 | ${this.arena.bossPhase.toUpperCase()} | ARMOR ${Math.ceil(this.arena.bossArmor)}`});
     this.bodyLabel?.setProperties({ text: this.noteTime > 0 ? this.note : TUTORIAL[this.step] });
-    this.hintLabel?.setProperties({ text: this.weapon.state==='Held'?(this.world.renderer.xr.isPresenting?'Swing to cut / A or X: counter / free thumbstick: vortex / B or Y: Divider':'Click-drag: slash / hold: charge / right click: counter / V: vortex / Q: Divider / R + drag down: return'):HINTS[this.step] });
+    this.hintLabel?.setProperties({ text: this.weapon.state==='Held'?(this.world.renderer.xr.isPresenting?'Swing to cut / A or X: counter / free thumbstick: vortex / B or Y: Divider':'Click/F: cut / right click: counter / V: vortex / Q: Divider / R: sheathe / 1-4: cast spells'):HINTS[this.step] });
     this.label('summon-button')?.setProperties({ text: this.state === 'Dormant' ? 'Summon' : 'Dismiss' });
     const left = this.hands[0], right = this.hands[1];
     const a = left.tracked ? `${left.mode}: ${left.pose}` : 'untracked';
