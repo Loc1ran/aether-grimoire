@@ -87,6 +87,8 @@ export class CombatSystem extends createSystem({
   private state = 'Dormant';
   private stateTime = 0;
   private bookDrop = 0;
+  private bookSide = 0;
+  private skillTime = 0;
   private mana = 100;
   private attribute: MagicAttribute = 'shadow';
   private dominant: 'left' | 'right' = 'right';
@@ -226,24 +228,38 @@ export class CombatSystem extends createSystem({
   private followBook(dt: number): void {
     const drawing = this.weapon.state === 'Preparing' || this.weapon.state === 'Ready' || this.weapon.state === 'Extracting' || this.weapon.state === 'Sheathing';
     const casting = this.casts[0].spell !== null || this.casts[1].spell !== null;
-    const using = this.weapon.state === 'Held' || casting;
-    const desktop=!this.world.renderer.xr.isPresenting;
-    const targetDrop = casting ? (desktop ? .03 : .26) : using ? (desktop ? .03 : .025) : 0;
-    this.bookDrop += (targetDrop - this.bookDrop) * (1 - Math.exp(-dt * 5));
+    if (casting || (!this.world.renderer.xr.isPresenting && this.desktopSword.striking)) this.skillTime = 1.4;
+    else this.skillTime = Math.max(0, this.skillTime - dt);
+
+    const activeSkill = casting || this.skillTime > 0;
+    const desktop = !this.world.renderer.xr.isPresenting;
+
+    // Drop the book down when using skills or weapon so the center view is wide open
+    const targetDrop = activeSkill ? (desktop ? 0.38 : 0.42) : (this.weapon.state === 'Held' ? (desktop ? 0.28 : 0.32) : (desktop ? 0.08 : 0));
+    this.bookDrop += (targetDrop - this.bookDrop) * (1 - Math.exp(-dt * 6));
+
+    // Smooth lateral movement: tuck book to the left corner (-0.38m) during skills
+    const targetSide = activeSkill ? (desktop ? -0.38 : -0.32) : (this.weapon.state === 'Held' ? (this.dominant === 'right' ? 0.25 : -0.25) : 0);
+    this.bookSide += (targetSide - this.bookSide) * (1 - Math.exp(-dt * 6));
+
     if (drawing) return;
     this.temp.copy(this.forward); this.temp.y = 0; this.temp.normalize();
-    this.desired.copy(this.head).addScaledVector(this.temp, desktop ? .66 : .56);
-    if(this.weapon.state==='Held')this.desired.addScaledVector(this.normal.crossVectors(this.up,this.temp),this.dominant==='right'?.22:-.22);
+    this.desired.copy(this.head).addScaledVector(this.temp, desktop ? 0.68 : 0.58);
+    this.desired.addScaledVector(this.normal.crossVectors(this.up, this.temp), this.bookSide);
+
     const personality = GRIMOIRES[this.attribute].hoverSpeed;
-    this.desired.y -= (desktop ? .25 : .22) + this.bookDrop;
+    this.desired.y -= (desktop ? 0.26 : 0.22) + this.bookDrop;
     this.desired.y += Math.sin(this.time * personality * 1.7) * 0.01;
     this.temp.subVectors(this.desired, this.book.position);
     const distance = this.temp.length();
-    if (distance > 0.001) this.book.position.addScaledVector(this.temp, Math.min(1 - Math.exp(-dt * 4), dt * 0.8 / distance));
+    if (distance > 0.001) this.book.position.addScaledVector(this.temp, Math.min(1 - Math.exp(-dt * 6), dt * 1.2 / distance));
+
     const yaw = Math.atan2(-this.forward.x, -this.forward.z);
     this.yawRotation.setFromAxisAngle(this.up, yaw);
+    const dynamicTilt = activeSkill ? -Math.PI / 3.2 : -Math.PI / 4;
+    this.tiltRotation.setFromAxisAngle(new Vector3(1, 0, 0), dynamicTilt);
     this.bookRotation.copy(this.yawRotation).multiply(this.tiltRotation);
-    this.book.quaternion.slerp(this.bookRotation, 1 - Math.exp(-dt * 4));
+    this.book.quaternion.slerp(this.bookRotation, 1 - Math.exp(-dt * 6));
   }
 
   private summonGesture(index: number, dt: number): void {
@@ -353,6 +369,7 @@ export class CombatSystem extends createSystem({
   private castSwordSkill():void {
     const ultimate=this.ultimateArmed, counter=this.weapon.counterTime>0;
     if(!ultimate && this.mana<12)return;
+    this.skillTime=1.5;
     this.temp.copy(this.head);this.temp.y-=.22;
     const sweep=!this.world.renderer.xr.isPresenting&&this.desktopSword.verticalAttack?this.desired.set(0,-1,0).applyQuaternion(this.headRotation):this.weapon.sweepDirection;
     this.signatures.cut(this.temp,this.forward,sweep,ultimate);
@@ -372,6 +389,7 @@ export class CombatSystem extends createSystem({
   private castVortex():void {
     if(this.state!=='Idle'||this.mana<24)return;
     if(!this.arena.vortex(this.head,this.forward)){this.notify('Wind Vortex is recovering.');return;}
+    this.skillTime=1.5;
     this.mana-=24;this.increment('casts');this.page(7,'Wind Vortex','Gather your enemies, then cut through the opening.');
     this.audio.play(this.arena.vortexCenter,'wind','cast',3);
   }
@@ -381,6 +399,7 @@ export class CombatSystem extends createSystem({
     if (!id) return;
     const spell = SPELLS[id];
     if (this.mana >= spell.cost) {
+      this.skillTime = 1.5;
       const factor = id === 'blast' ? 0.4 + charge * 0.6 : 1;
       const direction = id === 'blast' && hand.mode === 'hand' ? hand.palmNormal : hand.direction;
       if (id === 'blades') {
@@ -498,7 +517,7 @@ export class CombatSystem extends createSystem({
   }
 
   private reset(): void {
-    this.cancelHands(); this.keys.clear(); this.desktopGrip = false; this.pull = 0; this.bookDrop = 0;
+    this.cancelHands(); this.keys.clear(); this.desktopGrip = false; this.pull = 0; this.bookDrop = 0; this.bookSide = 0; this.skillTime = 0;
     this.weapon.reset(); this.arena.reset(); this.impacts.reset();
     this.desktopSword.reset();this.resolvePower=0;this.ultimateArmed=this.guardWasDown=this.ultimateWasDown=this.vortexWasDown=false;
     this.mana = 100; this.step = 0; this.noteTime = 0; this.shieldHealth[0] = this.shieldHealth[1] = 3;
