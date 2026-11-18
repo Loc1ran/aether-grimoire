@@ -282,7 +282,7 @@ export class CombatSystem extends createSystem({
     cast.cooldown = Math.max(0, cast.cooldown - dt);
     cast.pointGrace = hand.pose === 'point' ? 0.45 : Math.max(0, cast.pointGrace - dt);
     const owned = this.weapon.holderIndex === index || hand.mode !== 'hand' && hand.grab || cast.summonArmed || this.queries.uiHover.entities.size > 0;
-    if(this.weapon.state==='Held' && (hand.slash || hand.mode==='hand' && (hand.pose==='two'||hand.pose==='four'))) {this.cancelCast(index);this.visuals.hand(index,hand.position,hand.direction,this.book.position,this.attribute,0,false,this.time);return;}
+    if(this.world.renderer.xr.isPresenting && this.weapon.state==='Held' && (hand.slash || hand.mode==='hand' && (hand.pose==='two'||hand.pose==='four'))) {this.cancelCast(index);this.visuals.hand(index,hand.position,hand.direction,this.book.position,this.attribute,0,false,this.time);return;}
     if (!active || !hand.tracked || owned) { this.cancelCast(index); this.visuals.hand(index, hand.position, hand.direction, this.book.position, this.attribute, 0, false, this.time); return; }
     const palm = hand.mode === 'hand';
     const forwardPalm = hand.palmNormal.dot(this.forward) > 0.35;
@@ -480,7 +480,21 @@ export class CombatSystem extends createSystem({
       if (!['KeyG', 'KeyE', 'KeyR', 'KeyF', 'KeyV', 'KeyQ', 'KeyT', 'Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(event.code)) return;
       event.preventDefault(); this.audio.unlock(); this.keys.add(event.code);
       if (event.code === 'KeyG') this.toggleSummon();
-      if (event.code === 'KeyR') {this.pull=0;this.desktopSword.reset();this.weapon.suspend();this.guarding=false;}
+      if (event.code === 'KeyR') {
+        if (this.weapon.state === 'Held') {
+          this.weapon.reset();
+          this.desktopSword.reset();
+          this.desktopGrip = false;
+          this.pull = 0;
+          this.guarding = false;
+          this.notify('Sword sheathed into the grimoire.');
+        } else {
+          this.pull = 0;
+          this.desktopSword.reset();
+          this.weapon.suspend();
+          this.guarding = false;
+        }
+      }
       if(event.code==='KeyF'&&this.weapon.state==='Held'){this.desktopSword.press();this.desktopSword.release();}
       if(event.code==='KeyV')this.castVortex();if(event.code==='KeyQ')this.armDivider();
       if(event.code==='KeyT'&&this.state==='Idle')this.arena.startBoss();
@@ -512,14 +526,18 @@ export class CombatSystem extends createSystem({
   }
 
   private updateDesktop(dt: number): void {
+    const casterIndex = this.weapon.state === 'Held' ? (1 - this.weapon.holderIndex) : 1;
     for (let index = 0; index < 2; index++) {
       const hand = this.desktopHands[index];
       const grip = index === 1 && this.desktopGrip;
-      const pinch = index === 1 && this.keys.has('Digit1');
+      const isCaster = index === casterIndex || (this.weapon.state !== 'Held' && (index === 0 && this.keys.has('Digit2') || index === 1));
+      const pinch = isCaster && this.keys.has('Digit1');
       hand.grabDown = grip && !hand.grab; hand.grabUp = !grip && hand.grab; hand.grab = grip;
       hand.pinchDown = pinch && !hand.pinch; hand.pinchUp = !pinch && hand.pinch; hand.pinch = pinch;
       hand.tracked = true; hand.mode = 'desktop'; hand.validConfidence = 1; hand.stableTime += dt;
-      hand.shield = index === 0 && this.keys.has('Digit2'); hand.blast = index === 1 && this.keys.has('Digit3'); hand.slash = index === 1 && this.keys.has('Digit4');
+      hand.shield = isCaster && this.keys.has('Digit2');
+      hand.blast = isCaster && this.keys.has('Digit3');
+      hand.slash = isCaster && this.keys.has('Digit4');
       hand.pose = grip ? 'fist' : hand.shield || hand.blast ? 'open' : hand.slash ? 'two' : 'point';
       this.temp.copy(hand.position);
       hand.position.copy(this.head); hand.position.x += index ? 0.26 : -0.26; hand.position.y -= 0.28; hand.position.z -= 0.4;
