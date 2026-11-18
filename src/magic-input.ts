@@ -6,7 +6,7 @@ export type HandIntent = {
   position: Vector3; aimPosition: Vector3; quaternion: Quaternion; direction: Vector3; palmNormal: Vector3;
   velocity: Vector3; pinch: boolean; pinchDown: boolean; pinchUp: boolean;
   grab: boolean; grabDown: boolean; grabUp: boolean; pose: HandPose; stableTime: number;
-  summon: boolean; shield: boolean; blast: boolean; slash: boolean; validConfidence: number;
+  summon: boolean; shield: boolean; blast: boolean; slash: boolean; blades?: boolean; thunder?: boolean; validConfidence: number;
 };
 
 export const GESTURE_THRESHOLDS = {

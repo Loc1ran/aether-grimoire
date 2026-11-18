@@ -1,6 +1,6 @@
 export type MagicAttribute = 'shadow' | 'wind' | 'fire';
 export type SurfaceKind = 'stone' | 'metal' | 'wood' | 'dirt' | 'barrier';
-export type SpellId = 'bolt' | 'shield' | 'slash' | 'blast';
+export type SpellId = 'bolt' | 'shield' | 'slash' | 'blast' | 'blades' | 'thunder';
 export type ImpactLevel = 1 | 2 | 3 | 4;
 
 export const GRIMOIRES = {
@@ -14,6 +14,8 @@ export const SPELLS = {
   shield: { name: 'Aegis Circle', cost: 0, cooldown: 0.3, charge: 0.35, page: 2, damage: 0, speed: 0, power: 2, drain: 8, durability: 3 },
   slash: { name: 'Crescent Sever', cost: 16, cooldown: 0.8, charge: 0.35, page: 3, damage: 30, speed: 6, power: 2 },
   blast: { name: 'Astral Rupture', cost: 28, cooldown: 1.4, charge: 1.6, page: 4, damage: 60, speed: 5, power: 4 },
+  blades: { name: 'Spectral Phalanx', cost: 22, cooldown: 0.7, charge: 0.25, page: 5, damage: 48, speed: 14, power: 3 },
+  thunder: { name: 'Thunder Arc', cost: 26, cooldown: 0.85, charge: 0.2, page: 6, damage: 56, speed: 22, power: 4 },
 } as const;
 
 export const IMPACT_PROFILES = {

@@ -176,13 +176,33 @@ export class CombatVisuals {
     tintSpell(shot.edge.material as MeshBasicMaterial,attribute);
     if(aura && attribute==='shadow')(shot.edge.material as MeshBasicMaterial).color.setHex(0xd5c2a2);
     tintSpell(shot.tail.material as MeshBasicMaterial,attribute);
-    const reach = enemy ? 0.07 : spell === 'blast' ? 0.2 : 0.055;
+    const reach = enemy ? 0.07 : spell === 'blast' ? 0.2 : spell === 'thunder' ? 0.15 : spell === 'blades' ? 0.04 : 0.055;
     shot.core.visible = spell !== 'slash';
-    shot.core.scale.set(enemy?.18:spell==='blast'?.75:.28,enemy?.18:spell==='blast'?.75:.28,enemy?.25:spell==='blast'?1.35:.55);
-    shot.crescent.visible = spell === 'slash';
-    shot.crescent.scale.set(aura?1.8:.95,aura?1.3:.8,1);
-    shot.crescent.rotation.z=roll;
-    shot.tail.scale.set(reach*2,reach*2,spell==='blast'?1.5:.65);
+    if (spell === 'blades') {
+      shot.core.scale.set(0.06, 0.06, 1.5);
+      shot.crescent.visible = true;
+      shot.crescent.scale.set(0.4, 0.2, 0.5);
+      shot.crescent.rotation.z = roll;
+      shot.tail.scale.set(0.08, 0.08, 1.2);
+    } else if (spell === 'thunder') {
+      shot.core.scale.set(0.05, 0.05, 3.2);
+      shot.crescent.visible = false;
+      shot.tail.scale.set(0.4, 0.4, 3.0);
+    } else if (spell === 'blast') {
+      shot.core.scale.set(0.85, 0.85, 2.0);
+      shot.crescent.visible = false;
+      shot.tail.scale.set(0.4, 0.4, 2.2);
+    } else if (spell === 'slash') {
+      shot.core.scale.set(0.1, 0.1, 0.1);
+      shot.crescent.visible = true;
+      shot.crescent.scale.set(aura ? 2.2 : 1.6, aura ? 1.5 : 1.1, 1);
+      shot.crescent.rotation.z = roll;
+      shot.tail.scale.set(reach * 2, reach * 2, 0.65);
+    } else {
+      shot.core.scale.set(enemy ? 0.18 : 0.28, enemy ? 0.18 : 0.28, enemy ? 0.25 : 0.55);
+      shot.crescent.visible = false;
+      shot.tail.scale.set(reach * 2, reach * 2, 0.65);
+    }
     for(let i=0;i<shot.wisps.length;i++) {
       const wisp=shot.wisps[i];tintSpell(wisp.material,attribute,i===0&&attribute==='shadow');
       wisp.scale.set(reach*(attribute==='wind'?5:3.5),reach*(attribute==='wind'?5:3.5),spell==='blast'?.7:.38);

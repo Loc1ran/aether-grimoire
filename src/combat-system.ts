@@ -24,6 +24,8 @@ type Button = Label & { addEventListener(type: 'click', callback: () => void): v
 const INSTRUCTIONS = {
   bolt: 'Point, pinch to charge, release to fire.', shield: 'Extend an open palm forward and hold.',
   slash: 'Hold two fingers, then sweep sideways.', blast: 'Open palm near chest, hold, then push.',
+  blades: 'Hold 5: summon a phantom volley of spectral daggers.',
+  thunder: 'Hold 6: unleash a piercing lightning arc.',
 } as const;
 const TUTORIAL = [
   'Raise a hand near your chest. Pinch, hold, then pull upward to summon.',
@@ -293,6 +295,8 @@ export class CombatSystem extends createSystem({
       let spell: SpellId | null = null;
       if (hand.pinchDown && (!palm || cast.pointGrace > 0)) spell = 'bolt';
       else if (hand.slash || palm && hand.pose === 'two') spell = 'slash';
+      else if (hand.blades || palm && hand.pose === 'three') spell = 'blades';
+      else if (hand.thunder) spell = 'thunder';
       else if (open && !cast.shieldLock) spell = palm ? (hand.position.distanceTo(this.head) < 0.46 ? 'blast' : 'shield') : hand.blast ? 'blast' : 'shield';
       if (spell) this.beginSpell(index, spell);
     }
@@ -319,6 +323,14 @@ export class CombatSystem extends createSystem({
         const push = this.temp.subVectors(hand.position, cast.anchor).dot(hand.palmNormal) > 0.12 && hand.velocity.dot(hand.palmNormal) > 0.7;
         if (cast.elapsed >= 0.65 && (palm ? push : !hand.blast)) this.releaseSpell(index, charge);
         else if (palm && !open || !palm && !hand.blast) this.cancelCast(index);
+      } else if (spell === 'blades') {
+        charge = Math.min(1, cast.elapsed / SPELLS.blades.charge) * 0.8;
+        if (cast.elapsed >= SPELLS.blades.charge && (!palm && !hand.blades || palm)) this.releaseSpell(index, 1);
+        else if (!palm && !hand.blades) this.cancelCast(index);
+      } else if (spell === 'thunder') {
+        charge = Math.min(1, cast.elapsed / SPELLS.thunder.charge);
+        if (cast.elapsed >= SPELLS.thunder.charge && (!palm && !hand.thunder || palm)) this.releaseSpell(index, 1);
+        else if (!palm && !hand.thunder) this.cancelCast(index);
       } else {
         charge = Math.min(1, cast.elapsed / SPELLS.slash.charge) * 0.65;
         const sweep = hand.position.distanceTo(cast.anchor) > 0.16 && hand.velocity.length() > 0.7;
@@ -371,11 +383,22 @@ export class CombatSystem extends createSystem({
     if (this.mana >= spell.cost) {
       const factor = id === 'blast' ? 0.4 + charge * 0.6 : 1;
       const direction = id === 'blast' && hand.mode === 'hand' ? hand.palmNormal : hand.direction;
-      this.temp.copy(id === 'bolt' ? hand.aimPosition : hand.position).addScaledVector(direction, 0.06);
-      if (this.visuals.launch(this.temp, direction, spell.speed, this.attribute, id, spell.damage * factor, spell.power * factor)) {
+      if (id === 'blades') {
+        for (const dx of [-0.14, 0, 0.14]) {
+          this.temp.copy(hand.position).addScaledVector(direction, 0.06);
+          this.temp.x += dx;
+          this.visuals.launch(this.temp, direction, spell.speed, this.attribute, 'blades', Math.round(spell.damage / 3), spell.power);
+        }
         this.mana -= spell.cost; this.increment('casts'); this.advance(2);
-        this.audio.play(hand.position, this.attribute, 'cast', spell.power * factor);
-        this.haptic(index, 0.3, 70);
+        this.audio.play(hand.position, this.attribute, 'cast', 3);
+        this.haptic(index, 0.4, 80);
+      } else {
+        this.temp.copy(id === 'bolt' ? hand.aimPosition : hand.position).addScaledVector(direction, 0.06);
+        if (this.visuals.launch(this.temp, direction, spell.speed, this.attribute, id, spell.damage * factor, spell.power * factor)) {
+          this.mana -= spell.cost; this.increment('casts'); this.advance(2);
+          this.audio.play(hand.position, this.attribute, 'cast', spell.power * factor);
+          this.haptic(index, 0.3, 70);
+        }
       }
     }
     cast.cooldown = spell.cooldown; this.cancelCast(index);
@@ -477,7 +500,7 @@ export class CombatSystem extends createSystem({
   private bindDesktop(): void {
     const down = (event: KeyboardEvent) => {
       if (this.world.renderer.xr.isPresenting || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
-      if (!['KeyG', 'KeyE', 'KeyR', 'KeyF', 'KeyV', 'KeyQ', 'KeyT', 'Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(event.code)) return;
+      if (!['KeyG', 'KeyE', 'KeyR', 'KeyF', 'KeyV', 'KeyQ', 'KeyT', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(event.code)) return;
       event.preventDefault(); this.audio.unlock(); this.keys.add(event.code);
       if (event.code === 'KeyG') this.toggleSummon();
       if (event.code === 'KeyR') {
@@ -538,7 +561,9 @@ export class CombatSystem extends createSystem({
       hand.shield = isCaster && this.keys.has('Digit2');
       hand.blast = isCaster && this.keys.has('Digit3');
       hand.slash = isCaster && this.keys.has('Digit4');
-      hand.pose = grip ? 'fist' : hand.shield || hand.blast ? 'open' : hand.slash ? 'two' : 'point';
+      hand.blades = isCaster && this.keys.has('Digit5');
+      hand.thunder = isCaster && this.keys.has('Digit6');
+      hand.pose = grip ? 'fist' : hand.shield || hand.blast ? 'open' : hand.slash ? 'two' : hand.blades ? 'three' : 'point';
       this.temp.copy(hand.position);
       hand.position.copy(this.head); hand.position.x += index ? 0.26 : -0.26; hand.position.y -= 0.28; hand.position.z -= 0.4;
       hand.direction.set(this.mouseX, this.mouseY, 0.5).unproject(this.world.camera).sub(this.head).normalize();
