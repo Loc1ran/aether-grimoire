@@ -12,10 +12,10 @@ export const GRIMOIRES = {
 export const SPELLS = {
   bolt: { name: 'Rune Bolt', cost: 8, cooldown: 0.45, charge: 0.18, page: 1, damage: 18, speed: 8, power: 1 },
   shield: { name: 'Aegis Circle', cost: 0, cooldown: 0.3, charge: 0.35, page: 2, damage: 0, speed: 0, power: 2, drain: 8, durability: 3 },
-  slash: { name: 'Crescent Sever', cost: 16, cooldown: 0.8, charge: 0.35, page: 3, damage: 30, speed: 6, power: 2 },
+  slash: { name: 'Crescent Sever', cost: 16, cooldown: 0.8, charge: 0.35, page: 3, damage: 32, speed: 7, power: 2 },
   blast: { name: 'Astral Rupture', cost: 28, cooldown: 1.4, charge: 1.6, page: 4, damage: 60, speed: 5, power: 4 },
-  blades: { name: 'Spectral Phalanx', cost: 22, cooldown: 0.7, charge: 0.25, page: 5, damage: 48, speed: 14, power: 3 },
-  thunder: { name: 'Thunder Arc', cost: 26, cooldown: 0.85, charge: 0.2, page: 6, damage: 56, speed: 22, power: 4 },
+  blades: { name: 'Obsidian Eruption', cost: 24, cooldown: 0.85, charge: 0.25, page: 5, damage: 65, speed: 0, power: 4 },
+  thunder: { name: "Heaven's Judgement", cost: 30, cooldown: 0.95, charge: 0.2, page: 6, damage: 85, speed: 0, power: 4 },
 } as const;
 
 export const IMPACT_PROFILES = {

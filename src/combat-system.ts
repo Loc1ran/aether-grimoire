@@ -24,8 +24,8 @@ type Button = Label & { addEventListener(type: 'click', callback: () => void): v
 const INSTRUCTIONS = {
   bolt: 'Point, pinch to charge, release to fire.', shield: 'Extend an open palm forward and hold.',
   slash: 'Hold two fingers, then sweep sideways.', blast: 'Open palm near chest, hold, then push.',
-  blades: 'Hold 5: summon a phantom volley of spectral daggers.',
-  thunder: 'Hold 6: unleash a piercing lightning arc.',
+  blades: 'Hold 5 (or 3 fingers): erupt jagged obsidian spikes from the ground.',
+  thunder: "Hold 6 (or point up): call down lightning directly from the sky.",
 } as const;
 const TUTORIAL = [
   'Raise a hand near your chest. Pinch, hold, then pull upward to summon.',
@@ -384,14 +384,26 @@ export class CombatSystem extends createSystem({
       const factor = id === 'blast' ? 0.4 + charge * 0.6 : 1;
       const direction = id === 'blast' && hand.mode === 'hand' ? hand.palmNormal : hand.direction;
       if (id === 'blades') {
-        for (const dx of [-0.14, 0, 0.14]) {
-          this.temp.copy(hand.position).addScaledVector(direction, 0.06);
-          this.temp.x += dx;
-          this.visuals.launch(this.temp, direction, spell.speed, this.attribute, 'blades', Math.round(spell.damage / 3), spell.power);
-        }
+        this.temp.copy(this.head); this.temp.y = 0;
+        this.desired.copy(this.forward); this.desired.y = 0; this.desired.normalize();
+        this.signatures.triggerSpikes(this.temp, this.desired);
+        this.arena.earthSpikes(this.temp, this.desired, 6.0, 1.2, spell.damage, spell.power);
         this.mana -= spell.cost; this.increment('casts'); this.advance(2);
-        this.audio.play(hand.position, this.attribute, 'cast', 3);
-        this.haptic(index, 0.4, 80);
+        this.audio.play(this.temp, 'fire', 'impact', 4);
+        this.haptic(index, 0.8, 140);
+      } else if (id === 'thunder') {
+        const target = this.arena.findTargetInCone(this.head, this.forward, 9.0, 0.7);
+        if (target) {
+          target.object3D!.getWorldPosition(this.temp);
+        } else {
+          this.temp.copy(this.head).addScaledVector(this.forward, 3.8);
+          this.temp.y = 0;
+        }
+        this.signatures.triggerLightning(this.temp);
+        this.arena.skyLightning(this.temp, 2.0, spell.damage, spell.power);
+        this.mana -= spell.cost; this.increment('casts'); this.advance(2);
+        this.audio.play(this.temp, 'wind', 'impact', 4);
+        this.haptic(index, 0.9, 180);
       } else {
         this.temp.copy(id === 'bolt' ? hand.aimPosition : hand.position).addScaledVector(direction, 0.06);
         if (this.visuals.launch(this.temp, direction, spell.speed, this.attribute, id, spell.damage * factor, spell.power * factor)) {

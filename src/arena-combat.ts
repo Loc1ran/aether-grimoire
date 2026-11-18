@@ -113,6 +113,61 @@ export class ArenaCombat {
     this.vortexTime=3;this.vortexCooldown=5;return true;
   }
 
+  findTargetInCone(origin:Vector3,forward:Vector3,maxDistance=9,maxAngle=0.7):Entity|undefined {
+    let closest:Entity|undefined;let closestDist=maxDistance;
+    const cosLimit=Math.cos(maxAngle);
+    for(const entity of this.targets()) {
+      if(entity.getValue(TrainingTarget,'boss')&&!this.bossActive)continue;
+      if((entity.getValue(TrainingTarget,'health')??0)<=0)continue;
+      entity.object3D!.getWorldPosition(this.center);
+      this.offset.subVectors(this.center,origin);
+      const dist=this.offset.length();
+      if(dist>maxDistance)continue;
+      const dot=this.offset.normalize().dot(forward);
+      if(dot>cosLimit&&dist<closestDist){closestDist=dist;closest=entity;}
+    }
+    return closest;
+  }
+
+  earthSpikes(origin:Vector3,forward:Vector3,range=6.0,width=1.2,damage=65,power=4):number {
+    let hits=0;
+    for(const entity of this.targets()) {
+      if(entity.getValue(TrainingTarget,'boss')&&!this.bossActive)continue;
+      if((entity.getValue(TrainingTarget,'health')??0)<=0)continue;
+      entity.object3D!.getWorldPosition(this.center);
+      this.offset.subVectors(this.center,origin);this.offset.y=0;
+      const along=this.offset.dot(forward);
+      if(along<0.4||along>range)continue;
+      const perpSq=this.offset.lengthSq()-along*along;
+      const targetRadius=(entity.getValue(TrainingTarget,'radius')??0.36)+width;
+      if(perpSq<=targetRadius*targetRadius) {
+        this.point.copy(this.center);this.normal.set(0,1,0);
+        this.damageTarget(entity,damage,'fire',power,true);
+        this.impact('fire','stone',power,true,true);
+        hits++;
+      }
+    }
+    return hits;
+  }
+
+  skyLightning(targetPos:Vector3,radius=2.0,damage=85,power=4):number {
+    let hits=0;
+    for(const entity of this.targets()) {
+      if(entity.getValue(TrainingTarget,'boss')&&!this.bossActive)continue;
+      if((entity.getValue(TrainingTarget,'health')??0)<=0)continue;
+      entity.object3D!.getWorldPosition(this.center);
+      const dx=this.center.x-targetPos.x, dz=this.center.z-targetPos.z;
+      const targetRadius=(entity.getValue(TrainingTarget,'radius')??0.36)+radius;
+      if(dx*dx+dz*dz<=targetRadius*targetRadius) {
+        this.point.copy(this.center);this.normal.set(0,1,0);
+        this.damageTarget(entity,damage,'wind',power,true);
+        this.impact('shadow','barrier',power,true,true);
+        hits++;
+      }
+    }
+    return hits;
+  }
+
   dimensionCut(origin:Vector3,forward:Vector3,sweep:Vector3,ultimate=false,counter=false):number {
     this.cutNormal.crossVectors(forward,sweep).normalize();
     if(this.cutNormal.lengthSq()<.5)return 0;

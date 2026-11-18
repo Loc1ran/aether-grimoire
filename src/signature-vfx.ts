@@ -1,14 +1,27 @@
-import { BufferGeometry, ExtrudeGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending, Object3D, PlaneGeometry, Quaternion, Shape, Vector3 } from '@iwsdk/core';
+import { AdditiveBlending, BufferGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending, Object3D, PlaneGeometry, Quaternion, RingGeometry, Shape, Vector3 } from '@iwsdk/core';
 import { clockSpell, spellMaterial } from './spell-material.js';
 import { wedgeGeometry } from './scene-assets/lib/relic-forms.js';
 import { SmokeVolume } from './smoke-volume.js';
+
+interface EarthSpike {
+  root: Group;
+  outer: Mesh;
+  inner: Mesh;
+  origin: Vector3;
+  tilt: number;
+  yaw: number;
+  delay: number;
+  active: boolean;
+}
 
 export class SignatureVFX {
   readonly root=new Group();
   readonly vortex=new Group();
   readonly divider=new Group();
+  readonly spikesRoot=new Group();
+  readonly lightningRoot=new Group();
   private time=0;
-  private readonly materials: MeshBasicMaterial[]=[];
+  private readonly materials: (MeshBasicMaterial|MeshStandardMaterial)[]=[];
   private readonly geometries: BufferGeometry[]=[];
   private readonly cuts: {root:Group;life:number;size:number;smoke:SmokeVolume}[]=[];
   private readonly cyclone=new SmokeVolume(36,0xbab7ad);
@@ -20,6 +33,22 @@ export class SignatureVFX {
   private readonly direction=new Vector3();
   private readonly rotation=new Quaternion();
   private readonly card=new PlaneGeometry(1,1);
+
+  // Earth Spikes state
+  private readonly earthSpikes: EarthSpike[]=[];
+  private spikesAge=0;
+  private spikesActive=false;
+  private readonly spikesSmoke=new SmokeVolume(28,0x4e463d);
+  private readonly spikeNormal=new Vector3(0,1,0);
+  private readonly spikeSide=new Vector3();
+
+  // Sky Lightning state
+  private lightningLife=0;
+  private readonly lightningBolt: Group=new Group();
+  private readonly lightningCoreMat=new MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:AdditiveBlending});
+  private readonly lightningAuraMat=new MeshBasicMaterial({color:0x70bbff,transparent:true,opacity:0,blending:AdditiveBlending});
+  private readonly lightningRingMat=new MeshBasicMaterial({color:0x99ddff,transparent:true,opacity:0,blending:AdditiveBlending,side:DoubleSide});
+  private readonly lightningRing: Mesh;
 
   constructor() {
     this.root.name='SignatureMagic';this.geometries.push(this.card);
@@ -58,11 +87,113 @@ export class SignatureVFX {
     bladeGeometry.translate(0,0,-.012);this.geometries.push(bladeGeometry);
     const steel=new Mesh(bladeGeometry,this.dividerSteel);steel.name='ForgedAntiMagicBlade';this.divider.add(steel,this.dividerSmoke.mesh);
     this.divider.name='BlackDivider';this.divider.visible=false;this.root.add(this.divider);
+
+    // Build Earth Spikes
+    this.spikesRoot.name='EarthSpikes';this.root.add(this.spikesRoot);
+    const outerGeo=new CylinderGeometry(0.02,0.24,1.8,5);outerGeo.translate(0,0.9,0);this.geometries.push(outerGeo);
+    const innerGeo=new CylinderGeometry(0.012,0.18,1.7,5);innerGeo.translate(0,0.85,0);this.geometries.push(innerGeo);
+    const spikeSteelMat=new MeshStandardMaterial({color:0x15181e,roughness:0.36,metalness:0.75});
+    const spikeRuneMat=new MeshBasicMaterial({color:0xff6b2b,transparent:true,opacity:0.85,blending:AdditiveBlending});
+    this.materials.push(spikeSteelMat,spikeRuneMat);
+    for(let i=0;i<8;i++) {
+      const group=new Group();group.name=`ObsidianSpike${i}`;group.visible=false;
+      const outer=new Mesh(outerGeo,spikeSteelMat);
+      const inner=new Mesh(innerGeo,spikeRuneMat);
+      group.add(outer,inner);
+      this.spikesRoot.add(group);
+      this.earthSpikes.push({
+        root:group,outer,inner,origin:new Vector3(),tilt:0,yaw:0,delay:0,active:false,
+      });
+    }
+    this.spikesRoot.add(this.spikesSmoke.mesh);
+
+    // Build Sky Lightning
+    this.lightningRoot.name='SkyLightning';this.lightningRoot.visible=false;this.root.add(this.lightningRoot);
+    const lightningGeo=this.buildLightningGeometry();this.geometries.push(lightningGeo);
+    const coreMesh=new Mesh(lightningGeo,this.lightningCoreMat);coreMesh.name='LightningCore';
+    const auraMesh=new Mesh(lightningGeo,this.lightningAuraMat);auraMesh.name='LightningAura';auraMesh.scale.set(1.4,1,1.4);
+    this.lightningBolt.add(coreMesh,auraMesh);
+    const ringGeo=new RingGeometry(0.04,1.6,32);ringGeo.rotateX(-Math.PI/2);this.geometries.push(ringGeo);
+    this.lightningRing=new Mesh(ringGeo,this.lightningRingMat);this.lightningRing.position.y=0.02;this.lightningRing.name='ThunderShockwaveRing';
+    this.lightningRoot.add(this.lightningBolt,this.lightningRing);
+    this.materials.push(this.lightningCoreMat,this.lightningAuraMat,this.lightningRingMat);
   }
+
+  private buildLightningGeometry():BufferGeometry {
+    const geo=new BufferGeometry();
+    const pts: [number,number,number][]=[
+      [0,4.8,0],[0.16,4.1,-0.12],[-0.22,3.4,0.15],[0.24,2.7,-0.10],
+      [-0.18,2.0,0.16],[0.15,1.3,-0.12],[-0.12,0.7,0.08],[0,0.0,0],
+    ];
+    // Secondary fork branching from point 3
+    const forkPts: [number,number,number][]=[
+      [0.24,2.7,-0.10],[0.55,2.1,-0.20],[0.85,1.5,-0.28],
+    ];
+    const positions:number[]=[];const uvs:number[]=[];const indices:number[]=[];
+    const addSegmentStrip=(p1:[number,number,number],p2:[number,number,number],w:number,axis:'xy'|'zy')=>{
+      const base=positions.length/3;
+      const dx=axis==='xy'?w:0, dz=axis==='zy'?w:0;
+      positions.push(
+        p1[0]-dx,p1[1],p1[2]-dz,
+        p1[0]+dx,p1[1],p1[2]+dz,
+        p2[0]-dx,p2[1],p2[2]-dz,
+        p2[0]+dx,p2[1],p2[2]+dz,
+      );
+      uvs.push(0,0, 1,0, 0,1, 1,1);
+      indices.push(base,base+1,base+2, base+1,base+3,base+2);
+    };
+    for(let i=0;i<pts.length-1;i++){
+      const w=0.08*(1-i/pts.length*0.4);
+      addSegmentStrip(pts[i],pts[i+1],w,'xy');
+      addSegmentStrip(pts[i],pts[i+1],w,'zy');
+    }
+    for(let i=0;i<forkPts.length-1;i++){
+      const w=0.045*(1-i/forkPts.length*0.5);
+      addSegmentStrip(forkPts[i],forkPts[i+1],w,'xy');
+      addSegmentStrip(forkPts[i],forkPts[i+1],w,'zy');
+    }
+    geo.setAttribute('position',new Float32BufferAttribute(positions,3));
+    geo.setAttribute('uv',new Float32BufferAttribute(uvs,2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
   private material(color:number,kind:'rift'|'ribbon'|'sigil'):MeshBasicMaterial {
     const material=spellMaterial(kind);material.color.setHex(color);this.materials.push(material);return material;
   }
   setView(rotation:Quaternion):void { this.view.copy(rotation); }
+
+  triggerSpikes(origin:Vector3,forward:Vector3):void {
+    this.spikesAge=0;this.spikesActive=true;
+    this.spikeSide.set(-forward.z,0,forward.x).normalize();
+    for(let i=0;i<this.earthSpikes.length;i++) {
+      const spike=this.earthSpikes[i];
+      const dist=0.85+i*0.62;
+      const lateral=(i%2===0?0.22:-0.22)*(1+i*0.12);
+      spike.origin.copy(origin).addScaledVector(forward,dist).addScaledVector(this.spikeSide,lateral);
+      spike.origin.y=0;
+      spike.tilt=0.25+Math.sin(i*2.1)*0.08;
+      spike.yaw=Math.atan2(forward.x,forward.z)+Math.sin(i*1.8)*0.25;
+      spike.delay=i*0.042;
+      spike.active=true;
+      spike.root.position.copy(spike.origin);
+      spike.root.position.y=-1.85;
+      spike.root.rotation.set(0,0,0);
+      spike.root.rotateY(spike.yaw);
+      spike.root.rotateX(spike.tilt);
+      spike.root.scale.setScalar(0.75+i*0.06);
+      spike.root.visible=true;
+    }
+  }
+
+  triggerLightning(target:Vector3):void {
+    this.lightningRoot.position.set(target.x,0,target.z);
+    this.lightningLife=0.45;
+    this.lightningRoot.visible=true;
+    this.lightningRing.scale.setScalar(0.1);
+  }
+
   cut(origin:Vector3,forward:Vector3,sweep:Vector3,ultimate=false):void {
     const cut=this.cuts.find(c=>c.life<=0)??this.cuts[0];cut.life=.85;cut.size=ultimate?1.5:1;
     this.rotation.setFromUnitVectors(this.up,this.direction.copy(forward).normalize());
@@ -78,7 +209,57 @@ export class SignatureVFX {
     this.dividerSmoke.commit();
   }
   update(dt:number,vortexTime:number,center:Vector3):void {
-    this.time+=dt;for(const material of this.materials)clockSpell(material,this.time);
+    this.time+=dt;for(const material of this.materials)if('uniforms' in material)clockSpell(material as any,this.time);
+
+    // Update Earth Spikes
+    if(this.spikesActive) {
+      this.spikesAge+=dt;
+      let anyActive=false;
+      this.spikesSmoke.setView(this.view);
+      for(let i=0;i<this.earthSpikes.length;i++) {
+        const spike=this.earthSpikes[i];
+        if(!spike.active)continue;
+        if(this.spikesAge<spike.delay){spike.root.position.y=-1.85;anyActive=true;continue;}
+        const t=this.spikesAge-spike.delay;
+        if(t<=0.11) {
+          anyActive=true;
+          const p=t/0.11;
+          const rise=Math.sin(p*Math.PI*0.5);
+          spike.root.position.y=-1.85*(1-rise);
+          // Dust emission at burst
+          this.spikesSmoke.particle(i*3,spike.origin.x,0.08,spike.origin.z,0.35+p*0.4,i+t,0.32*(1-p));
+          this.spikesSmoke.particle(i*3+1,spike.origin.x+0.12,0.12,spike.origin.z,0.4+p*0.3,i+t+0.5,0.28*(1-p));
+          this.spikesSmoke.particle(i*3+2,spike.origin.x-0.12,0.06,spike.origin.z+0.1,0.3+p*0.5,i+t+0.9,0.3*(1-p));
+        } else if(t<=0.85) {
+          anyActive=true;
+          spike.root.position.y=Math.sin(t*45)*0.008;
+        } else if(t<=1.32) {
+          anyActive=true;
+          const fade=(t-0.85)/0.47;
+          spike.root.position.y=-1.85*fade;
+          spike.root.scale.setScalar((0.75+i*0.06)*(1-fade*0.3));
+        } else {
+          spike.active=false;spike.root.visible=false;
+        }
+      }
+      this.spikesSmoke.commit();
+      if(!anyActive)this.spikesActive=false;
+    }
+
+    // Update Sky Lightning
+    if(this.lightningLife>0) {
+      this.lightningLife=Math.max(0,this.lightningLife-dt);
+      const ratio=this.lightningLife/0.45;
+      const strobe=Math.sin(this.lightningLife*75)>0?1:0.35;
+      this.lightningCoreMat.opacity=ratio*strobe;
+      this.lightningAuraMat.opacity=ratio*0.75*strobe;
+      const ringScale=(1-ratio)*2.2;
+      this.lightningRing.scale.setScalar(Math.max(0.1,ringScale));
+      this.lightningRingMat.opacity=ratio*0.85;
+      if(this.lightningLife<=0)this.lightningRoot.visible=false;
+    }
+
+    // Update Dimension Fracture Cuts
     for(const cut of this.cuts) {
       cut.life=Math.max(0,cut.life-dt);cut.root.visible=cut.life>0;
       if(cut.life<=0)continue;
@@ -95,6 +276,8 @@ export class SignatureVFX {
       }
       cut.smoke.commit();
     }
+
+    // Update Wind Vortex
     this.vortex.visible=vortexTime>0;if(!this.vortex.visible)return;
     this.vortex.position.copy(center);this.vortex.position.y=.06;
     const fade=Math.min(1,vortexTime*2,Math.max(0,(3-vortexTime)*4));this.vortex.scale.setScalar(.8+fade*.2);
@@ -112,6 +295,17 @@ export class SignatureVFX {
     }
     this.cyclone.commit();
   }
-  reset():void { for(const cut of this.cuts){cut.life=0;cut.root.visible=false;}this.vortex.visible=this.divider.visible=false; }
-  dispose():void { for(const cut of this.cuts)cut.smoke.dispose();this.cyclone.dispose();this.dividerSmoke.dispose();this.dividerSteel.dispose();for(const geometry of this.geometries)geometry.dispose();for(const material of this.materials)material.dispose(); }
+  reset():void {
+    for(const cut of this.cuts){cut.life=0;cut.root.visible=false;}
+    for(const spike of this.earthSpikes){spike.active=false;spike.root.visible=false;}
+    this.lightningLife=0;this.lightningRoot.visible=false;
+    this.vortex.visible=this.divider.visible=false;
+  }
+  dispose():void {
+    for(const cut of this.cuts)cut.smoke.dispose();
+    this.cyclone.dispose();this.dividerSmoke.dispose();this.dividerSteel.dispose();
+    this.spikesSmoke.dispose();
+    for(const geometry of this.geometries)geometry.dispose();
+    for(const material of this.materials)material.dispose();
+  }
 }

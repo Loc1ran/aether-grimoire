@@ -193,20 +193,26 @@ export class CombatVisuals {
       shot.crescent.visible = false;
       shot.tail.scale.set(0.4, 0.4, 2.2);
     } else if (spell === 'slash') {
-      shot.core.scale.set(0.1, 0.1, 0.1);
+      shot.core.scale.set(0.001, 0.001, 0.001);
       shot.crescent.visible = true;
-      shot.crescent.scale.set(aura ? 2.2 : 1.6, aura ? 1.5 : 1.1, 1);
+      shot.crescent.scale.set(aura ? 2.6 : 2.0, 0.22, aura ? 1.5 : 1.1);
       shot.crescent.rotation.z = roll;
-      shot.tail.scale.set(reach * 2, reach * 2, 0.65);
+      shot.tail.scale.set(0.02, 0.02, 0.02);
     } else {
       shot.core.scale.set(enemy ? 0.18 : 0.28, enemy ? 0.18 : 0.28, enemy ? 0.25 : 0.55);
       shot.crescent.visible = false;
       shot.tail.scale.set(reach * 2, reach * 2, 0.65);
     }
     for(let i=0;i<shot.wisps.length;i++) {
-      const wisp=shot.wisps[i];tintSpell(wisp.material,attribute,i===0&&attribute==='shadow');
-      wisp.scale.set(reach*(attribute==='wind'?5:3.5),reach*(attribute==='wind'?5:3.5),spell==='blast'?.7:.38);
-      wisp.position.z=-.08-i*.035;wisp.material.opacity=i===0?.6:.75;
+      const wisp=shot.wisps[i];
+      if (spell === 'slash') {
+        wisp.visible = false;
+      } else {
+        wisp.visible = true;
+        tintSpell(wisp.material,attribute,i===0&&attribute==='shadow');
+        wisp.scale.set(reach*(attribute==='wind'?5:3.5),reach*(attribute==='wind'?5:3.5),spell==='blast'?.7:.38);
+        wisp.position.z=-.08-i*.035;wisp.material.opacity=i===0?.6:.75;
+      }
     }
     return true;
   }
