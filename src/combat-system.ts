@@ -108,7 +108,8 @@ export class CombatSystem extends createSystem({
   private headRotation = new Quaternion();
   private bookRotation = new Quaternion();
   private yawRotation = new Quaternion();
-  private tiltRotation = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 4);
+  private readonly tiltAxis = new Vector3(1, 0, 0);
+  private tiltRotation = new Quaternion().setFromAxisAngle(this.tiltAxis, -Math.PI / 4);
   private up = new Vector3(0, 1, 0);
   private time = 0;
 
@@ -257,7 +258,7 @@ export class CombatSystem extends createSystem({
     const yaw = Math.atan2(-this.forward.x, -this.forward.z);
     this.yawRotation.setFromAxisAngle(this.up, yaw);
     const dynamicTilt = activeSkill ? -Math.PI / 3.2 : -Math.PI / 4;
-    this.tiltRotation.setFromAxisAngle(new Vector3(1, 0, 0), dynamicTilt);
+    this.tiltRotation.setFromAxisAngle(this.tiltAxis, dynamicTilt);
     this.bookRotation.copy(this.yawRotation).multiply(this.tiltRotation);
     this.book.quaternion.slerp(this.bookRotation, 1 - Math.exp(-dt * 6));
   }
