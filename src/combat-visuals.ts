@@ -5,19 +5,21 @@ import { GRIMOIRES, type MagicAttribute, type SpellId } from './combat-data.js';
 import { crescentSurface, flowRibbon } from './scene-assets/lib/magic-surfaces.js';
 import { clockSpell, spellMaterial, tintSpell, type SpellSurface } from './spell-material.js';
 import { SmokeVolume } from './smoke-volume.js';
+import { SpellChargeVFX } from './spell-charge-vfx.js';
 
 export type Shot = {
   root: Group; core: Mesh; crescent: Mesh; tail: Mesh; material: MeshBasicMaterial;
   previous: Vector3; velocity: Vector3; life: number; enemy: boolean;
   damage: number; power: number; attribute: MagicAttribute; spell: SpellId;
-  wisps: Mesh<BufferGeometry, MeshBasicMaterial>[]; edge: Mesh; age: number; aura: boolean; roll: number;
+  wisps: Mesh<BufferGeometry, MeshBasicMaterial>[]; edge: Mesh; nova: Group; age: number; aura: boolean; roll: number;
 };
 
 export class CombatVisuals {
   readonly root = new Group();
   readonly shots: Shot[] = [];
   readonly shields: Mesh[] = [];
-  readonly charges: Mesh[] = [];
+  readonly charges: Group[] = [];
+  private readonly chargeEffects: SpellChargeVFX[] = [];
   readonly beams: Mesh[][] = [];
   readonly portal: Mesh;
   readonly glyph: Group;
@@ -36,6 +38,7 @@ export class CombatVisuals {
   private readonly trailGeometry = new BufferGeometry();
   private readonly trailPositions = new Float32Array(24*3);
   private readonly membrane = new CircleGeometry(.29,64);
+  private readonly wardSeal = new PlaneGeometry(.72, .72);
   private time = 0;
   private readonly smokeCard = new PlaneGeometry(1,1);
   private readonly auraRotation = new Quaternion();
@@ -43,6 +46,7 @@ export class CombatVisuals {
   private readonly bladeLayers: Mesh<BufferGeometry,MeshBasicMaterial>[] = [];
   private readonly smoke=new SmokeVolume(100,0x77736c);
   private readonly view=new Quaternion();
+  private readonly novaRibbon = flowRibbon(1.4, .24, .18);
 
   constructor() {
     this.root.name = 'CombatEffects';
@@ -52,6 +56,7 @@ export class CombatVisuals {
     this.ribbon = crescentSurface();
     this.ward = new SphereGeometry(.31,40,24,0,Math.PI*2,0,Math.PI/2);
     this.membrane.rotateX(-Math.PI/2);
+    this.wardSeal.rotateX(-Math.PI/2);
     this.tear = new CircleGeometry(.12,64);
     for (let i = 0; i < 20; i++) {
       const root = new Group();
@@ -68,6 +73,15 @@ export class CombatVisuals {
       tail.name = 'Trail';
       tail.position.z = -0.14;
       root.add(core, crescent, tail);
+      const nova = new Group(); nova.name = 'AstralNova'; nova.visible = false;
+      for (let n = 0; n < 3; n++) {
+        const heart = new Mesh(this.smokeCard, this.material(.9, 'nova'));
+        heart.name = `NovaHeart${n}`; heart.scale.setScalar(.4); heart.rotation.y = n * Math.PI / 3;
+        const stream = new Mesh(this.novaRibbon, this.material(.8, 'ribbon'));
+        stream.name = `NovaStream${n}`; stream.rotation.z = n * Math.PI * 2 / 3; stream.scale.set(1, 1, 1.2);
+        nova.add(heart, stream);
+      }
+      root.add(nova);
       const wisps: Mesh<BufferGeometry,MeshBasicMaterial>[]=[];
       for(let n=0;n<3;n++) {
         const wisp=new Mesh(this.streak,this.material(.5,n===0?'mist':'ribbon'));
@@ -76,7 +90,7 @@ export class CombatVisuals {
       this.root.add(root);
       this.shots.push({
         root, core, crescent, tail, material, previous: new Vector3(), velocity: new Vector3(),
-        life: 0, enemy: false, damage: 0, power: 1, attribute: 'shadow', spell: 'bolt', wisps, edge, age: 0, aura: false, roll: 0,
+        life: 0, enemy: false, damage: 0, power: 1, attribute: 'shadow', spell: 'bolt', wisps, edge, nova, age: 0, aura: false, roll: 0,
       });
     }
     for (let i = 0; i < 2; i++) {
@@ -90,17 +104,20 @@ export class CombatVisuals {
         shield.add(layer);
       }
       shield.visible = false;
+      for (let n = 0; n < 2; n++) {
+        const seal = new Mesh(this.wardSeal, this.material(n ? .35 : .8, 'mandala'));
+        seal.name = `AegisRunicSeal${n}`; seal.position.y = .035 + n * .025;
+        seal.scale.setScalar(n ? .75 : 1); shield.add(seal);
+      }
       this.shields.push(shield);
       this.root.add(shield);
-      const charge = new Mesh(this.dart, this.material(.8,'flare'));
+      const effect = new SpellChargeVFX();
+      this.chargeEffects.push(effect);
+      const charge = effect.root;
       charge.name = i ? 'ChargeRight' : 'ChargeLeft';
       charge.visible = false;
       this.charges.push(charge);
       this.root.add(charge);
-      for(let n=0;n<3;n++) {
-        const coil=new Mesh(this.streak,this.material(.7));coil.name=`ChargeCoil${n}`;
-        coil.rotation.z=n*Math.PI*2/3;coil.scale.set(1.8,1.8,1.8);charge.add(coil);
-      }
       const beam: Mesh[] = [];
       for (let n = 0; n < 6; n++) {
         const bead = new Mesh(this.streak, this.material(0.55));
@@ -177,7 +194,10 @@ export class CombatVisuals {
     if(aura && attribute==='shadow')(shot.edge.material as MeshBasicMaterial).color.setHex(0xd5c2a2);
     tintSpell(shot.tail.material as MeshBasicMaterial,attribute);
     const reach = enemy ? 0.07 : spell === 'blast' ? 0.2 : spell === 'thunder' ? 0.15 : spell === 'blades' ? 0.04 : 0.055;
-    shot.core.visible = spell !== 'slash';
+    shot.core.visible = spell !== 'slash' && spell !== 'blast';
+    shot.nova.visible = spell === 'blast';
+    shot.nova.rotation.set(0, 0, 0);
+    for (const child of shot.nova.children) tintSpell((child as Mesh).material as MeshBasicMaterial, attribute);
     if (spell === 'blades') {
       shot.core.scale.set(0.06, 0.06, 1.5);
       shot.crescent.visible = true;
@@ -195,7 +215,7 @@ export class CombatVisuals {
     } else if (spell === 'slash') {
       shot.core.scale.set(0.001, 0.001, 0.001);
       shot.crescent.visible = true;
-      shot.crescent.scale.set(aura ? 2.6 : 2.0, 0.22, aura ? 1.5 : 1.1);
+      shot.crescent.scale.set(aura ? 2.6 : 2.0, 0.6, aura ? 1.5 : 1.1);
       shot.crescent.rotation.z = roll;
       shot.tail.scale.set(0.02, 0.02, 0.02);
     } else {
@@ -206,9 +226,13 @@ export class CombatVisuals {
     for(let i=0;i<shot.wisps.length;i++) {
       const wisp=shot.wisps[i];
       if (spell === 'slash') {
-        wisp.visible = false;
+        wisp.visible = true; wisp.geometry = this.ribbon;
+        tintSpell(wisp.material, attribute);
+        wisp.scale.copy(shot.crescent.scale).multiplyScalar(1 - i * .07);
+        wisp.position.set(0, -i * .035, -.07 - i * .08); wisp.rotation.z = roll;
       } else {
-        wisp.visible = true;
+        wisp.visible = true; wisp.geometry = this.streak; wisp.position.set(0, 0, 0);
+        wisp.rotation.z = i * Math.PI * 2 / 3;
         tintSpell(wisp.material,attribute,i===0&&attribute==='shadow');
         wisp.scale.set(reach*(attribute==='wind'?5:3.5),reach*(attribute==='wind'?5:3.5),spell==='blast'?.7:.38);
         wisp.position.z=-.08-i*.035;wisp.material.opacity=i===0?.6:.75;
@@ -264,18 +288,11 @@ export class CombatVisuals {
     }
   }
 
-  hand(index: number, position: Vector3, direction: Vector3, book: Vector3, attribute: MagicAttribute, charge: number, shield: boolean, time: number): void {
+  hand(index: number, position: Vector3, direction: Vector3, book: Vector3, attribute: MagicAttribute, charge: number, shield: boolean, time: number, spell: SpellId | null): void {
     const orb = this.charges[index];
-    orb.visible = charge > 0;
-    orb.position.copy(position).addScaledVector(direction, 0.08);
+    orb.position.copy(position).addScaledVector(direction, 0.16);
     orb.quaternion.setFromUnitVectors(this.axis, direction);
-    const amount = Math.min(1, charge);
-    orb.scale.set(.09+amount*.11,.09+amount*.11,.10+amount*.22);
-    tintSpell(orb.material as MeshBasicMaterial,attribute);
-    for(let i=0;i<orb.children.length;i++) {
-      const coil=orb.children[i] as Mesh<BufferGeometry,MeshBasicMaterial>;
-      tintSpell(coil.material,attribute);coil.rotation.z=time*(attribute==='wind'?3:1.5)+i*Math.PI*2/3;
-    }
+    this.chargeEffects[index].update(spell, attribute, charge, time);
     const barrier = this.shields[index];
     barrier.visible = shield;
     barrier.position.copy(position).addScaledVector(direction, 0.14);
@@ -285,7 +302,7 @@ export class CombatVisuals {
     let plateIndex = 0;
     for (const child of barrier.children) {
       if (!(child instanceof Mesh)) continue;
-      child.rotation.y = time*.2*(plateIndex===0?1:-1);
+      child.rotation.y = time*(plateIndex < 2 ? .2 : .5)*(plateIndex%2===0?1:-1);
       tintSpell(child.material as MeshBasicMaterial,attribute);
       plateIndex += 1;
     }
@@ -344,13 +361,16 @@ export class CombatVisuals {
       shot.life -= delta;
       shot.age+=delta;
       shot.core.rotation.z += delta * (shot.spell === 'blast' ? 3 : 9);
+      shot.nova.rotation.z += delta * 2.4;
+      shot.nova.scale.setScalar(1 + Math.sin(shot.age * 7) * .06);
       shot.crescent.rotation.z = shot.roll+Math.sin(shot.age*3)*.04;
       (shot.crescent.material as MeshBasicMaterial).opacity=Math.min(1,shot.life*4);
       (shot.edge.material as MeshBasicMaterial).opacity=Math.min(1,shot.life*5);
       shot.tail.rotation.z += delta*(shot.attribute==='wind'?6:1.2);
       for(let i=0;i<shot.wisps.length;i++) {
-        const wisp=shot.wisps[i];wisp.rotation.z+=delta*(shot.attribute==='wind'?5:shot.attribute==='fire'?2:.65)*(i%2?1:-1);
-        wisp.material.opacity=(i===0?.5:.8)*Math.min(1,shot.age*14)*Math.min(1,shot.life*6);
+        const wisp=shot.wisps[i];
+        if (shot.spell !== 'slash') wisp.rotation.z+=delta*(shot.attribute==='wind'?5:shot.attribute==='fire'?2:.65)*(i%2?1:-1);
+        wisp.material.opacity=(shot.spell === 'slash' ? .26 / (i + 1) : i===0?.5:.8)*Math.min(1,shot.age*14)*Math.min(1,shot.life*6);
       }
     }
     this.smoke.commit();
@@ -385,7 +405,10 @@ export class CombatVisuals {
     this.ward.dispose();
     this.tear.dispose();
     this.membrane.dispose();this.trailGeometry.dispose();
+    this.wardSeal.dispose();
+    for (const effect of this.chargeEffects) effect.dispose();
     this.smokeCard.dispose();
+    this.novaRibbon.dispose();
     this.smoke.dispose();
     for(const material of this.materials)material.dispose();
   }

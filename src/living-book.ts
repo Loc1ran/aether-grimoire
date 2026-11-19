@@ -27,7 +27,7 @@ export class LivingBook {
   private readonly tint = new Color();
   private attribute: MagicAttribute = 'shadow';
   private selected = -1;
-  private title = 'The Umbral Codex';
+  private title = 'The Umbral Grimoire';
   private instruction = 'Your intent awakens the pages.';
   private turn = 2;
   private energy = 0;

@@ -301,8 +301,8 @@ export class CombatSystem extends createSystem({
     cast.cooldown = Math.max(0, cast.cooldown - dt);
     cast.pointGrace = hand.pose === 'point' ? 0.45 : Math.max(0, cast.pointGrace - dt);
     const owned = this.weapon.holderIndex === index || hand.mode !== 'hand' && hand.grab || cast.summonArmed || this.queries.uiHover.entities.size > 0;
-    if(this.world.renderer.xr.isPresenting && this.weapon.state==='Held' && (hand.slash || hand.mode==='hand' && (hand.pose==='two'||hand.pose==='four'))) {this.cancelCast(index);this.visuals.hand(index,hand.position,hand.direction,this.book.position,this.attribute,0,false,this.time);return;}
-    if (!active || !hand.tracked || owned) { this.cancelCast(index); this.visuals.hand(index, hand.position, hand.direction, this.book.position, this.attribute, 0, false, this.time); return; }
+    if(this.world.renderer.xr.isPresenting && this.weapon.state==='Held' && (hand.slash || hand.mode==='hand' && (hand.pose==='two'||hand.pose==='four'))) {this.cancelCast(index);this.visuals.hand(index,hand.position,hand.direction,this.book.position,this.attribute,0,false,this.time,null);return;}
+    if (!active || !hand.tracked || owned) { this.cancelCast(index); this.visuals.hand(index, hand.position, hand.direction, this.book.position, this.attribute, 0, false, this.time, null); return; }
     const palm = hand.mode === 'hand';
     const forwardPalm = hand.palmNormal.dot(this.forward) > 0.35;
     const open = palm ? hand.pose === 'open' && forwardPalm : hand.shield || hand.blast;
@@ -322,7 +322,7 @@ export class CombatSystem extends createSystem({
     if (spell) {
       cast.elapsed += dt;
       if (spell === 'bolt') {
-        charge = Math.min(1, cast.elapsed / SPELLS.bolt.charge) * 0.3;
+        charge = Math.min(1, cast.elapsed / SPELLS.bolt.charge);
         if (hand.pinchUp) { if (cast.elapsed >= SPELLS.bolt.charge) this.releaseSpell(index, 1); else this.cancelCast(index); }
       } else if (spell === 'shield') {
         if (this.mana < 0.2 && open && !cast.shieldLock) {
@@ -341,7 +341,7 @@ export class CombatSystem extends createSystem({
         if (cast.elapsed >= 0.65 && (palm ? push : !hand.blast)) this.releaseSpell(index, charge);
         else if (palm && !open || !palm && !hand.blast) this.cancelCast(index);
       } else if (spell === 'blades') {
-        charge = Math.min(1, cast.elapsed / SPELLS.blades.charge) * 0.8;
+        charge = Math.min(1, cast.elapsed / SPELLS.blades.charge);
         if (cast.elapsed >= SPELLS.blades.charge && (!palm && !hand.blades || palm)) this.releaseSpell(index, 1);
         else if (!palm && !hand.blades) this.cancelCast(index);
       } else if (spell === 'thunder') {
@@ -349,14 +349,14 @@ export class CombatSystem extends createSystem({
         if (cast.elapsed >= SPELLS.thunder.charge && (!palm && !hand.thunder || palm)) this.releaseSpell(index, 1);
         else if (!palm && !hand.thunder) this.cancelCast(index);
       } else {
-        charge = Math.min(1, cast.elapsed / SPELLS.slash.charge) * 0.65;
+        charge = Math.min(1, cast.elapsed / SPELLS.slash.charge);
         const sweep = hand.position.distanceTo(cast.anchor) > 0.16 && hand.velocity.length() > 0.7;
         if (cast.elapsed >= SPELLS.slash.charge && (sweep || !palm && !hand.slash)) this.releaseSpell(index, 1);
         else if (palm && hand.pose !== 'two') this.cancelCast(index);
       }
     }
     if (!cast.spell) { charge = 0; shield = false; }
-    this.visuals.hand(index, hand.position, palm && shield ? hand.palmNormal : hand.direction, this.book.position, this.attribute, charge, shield, this.time);
+    this.visuals.hand(index, hand.position, palm && shield ? hand.palmNormal : hand.direction, this.book.position, this.attribute, charge, shield, this.time, cast.spell);
   }
 
   private beginSpell(index: number, spell: SpellId): void {
@@ -519,7 +519,7 @@ export class CombatSystem extends createSystem({
 
   private reset(): void {
     this.cancelHands(); this.keys.clear(); this.desktopGrip = false; this.pull = 0; this.bookDrop = 0; this.bookSide = 0; this.skillTime = 0;
-    this.weapon.reset(); this.arena.reset(); this.impacts.reset();
+    this.weapon.reset(); this.arena.reset(); this.impacts.reset(); this.signatures.reset();
     this.desktopSword.reset();this.resolvePower=0;this.ultimateArmed=this.guardWasDown=this.ultimateWasDown=this.vortexWasDown=false;
     this.mana = 100; this.step = 0; this.noteTime = 0; this.shieldHealth[0] = this.shieldHealth[1] = 3;
     for (const cast of this.casts) { cast.cooldown = 0; cast.shieldLock = false; cast.pointGrace = 0; }

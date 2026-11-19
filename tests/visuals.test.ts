@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Matrix4, Quaternion, Texture, Vector3 } from '@iwsdk/core';
+import { Matrix4, Mesh, Quaternion, Texture, Vector3 } from '@iwsdk/core';
 import { SmokeVolume } from '../src/smoke-volume.js';
 import { setSmokeTexture } from '../src/spell-material.js';
 import { leafTurnProgress } from '../src/living-book.js';
@@ -37,6 +37,33 @@ for(const geometry of [flowRibbon(),crescentSurface()]) {
   geometry.dispose();
 }
 const effects=new CombatVisuals(), tip=new Vector3(0,1,0), grip=new Vector3();
+const aim=new Vector3(0,0,-1), heldNames=new Set<string>();
+for(const spell of ['bolt','slash','blast','blades','thunder'] as const) {
+  effects.hand(1,tip,aim,grip,'shadow',1,false,1,spell);
+  const active=effects.charges[1].children.filter(child=>child.visible);
+  assert.equal(active.length,1,'switching skill must leave only its own held effect visible');
+  heldNames.add(active[0].name);
+  const first=active[0].children[0] as Mesh;
+  const rotation=first.rotation.clone(), position=first.position.clone(), formRotation=active[0].rotation.clone();
+  effects.hand(1,tip,aim,grip,'shadow',1,false,1.25,spell);
+  assert.ok(!first.rotation.equals(rotation)||!first.position.equals(position)||!active[0].rotation.equals(formRotation),'held effects keep moving at full charge');
+  assert.equal((first.material as any).userData.clock.value,1.25,'held shader time advances');
+  const count=active[0].children.length;
+  for(let n=0;n<60;n++)effects.hand(1,tip,aim,grip,'wind',1,false,2+n/60,spell);
+  assert.equal(active[0].children.length,count,'holding does not create particles or meshes');
+}
+assert.equal(heldNames.size,5,'skills need distinct held silhouettes');
+effects.hand(0,tip,aim,grip,'fire',1,false,2,'bolt');
+effects.hand(1,tip,aim,grip,'wind',0,true,2,'shield');
+assert.ok(effects.charges[0].visible&&!effects.charges[1].visible&&effects.shields[1].visible,'shield and other hand stay independent');
+effects.hand(0,tip,aim,grip,'fire',0,false,3,null);
+assert.equal(effects.charges[0].visible,false,'release or tracking loss clears the held effect');
+effects.launch(tip,aim,5,'fire','blast',60,4);
+assert.ok(effects.shots[0].nova.visible&&!effects.shots[0].core.visible,'blast has a vortex core, not the bolt lance');
+effects.reset();
+effects.launch(tip,aim,8,'shadow','bolt',18,1);
+assert.ok(!effects.shots[0].nova.visible&&effects.shots[0].core.visible,'reusing a projectile clears the previous spell form');
+effects.reset();
 effects.shots[0].core.geometry.computeBoundingBox();
 const lanceSize=effects.shots[0].core.geometry.boundingBox!.getSize(new Vector3());
 assert.ok(lanceSize.z>lanceSize.x*2,'the casting core must read as an elongated lance');

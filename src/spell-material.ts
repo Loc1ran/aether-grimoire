@@ -2,7 +2,7 @@ import { AdditiveBlending, DoubleSide, MeshBasicMaterial, NormalBlending, type T
 import { GRIMOIRES, type MagicAttribute } from './combat-data.js';
 
 /** Soft, moving ink contours on the effect surface; no texture downloads or frame allocations. */
-export type SpellSurface = 'ribbon' | 'mist' | 'flare' | 'sigil' | 'smoke' | 'rift' | 'ink' | 'edge' | 'aura' | 'wake' | 'ward';
+export type SpellSurface = 'ribbon' | 'mist' | 'flare' | 'sigil' | 'smoke' | 'rift' | 'ink' | 'edge' | 'aura' | 'wake' | 'ward' | 'mandala' | 'storm' | 'nova';
 let smokeTexture: Texture | undefined;
 export function setSmokeTexture(texture: Texture): void { smokeTexture=texture; }
 export function spellMaterial(kind: SpellSurface, opacity = 1): MeshBasicMaterial {
@@ -31,7 +31,25 @@ export function spellMaterial(kind: SpellSurface, opacity = 1): MeshBasicMateria
       float flow = sin(p.x * 21.0 - t * 4.5) * sin(p.y * 17.0 + t * 2.0);
       float fine = sin(p.x * 49.0 + p.y * 31.0 - t * 6.0) * 0.12;
       float shape;
-      ${kind === 'ward' ? `
+      ${kind === 'mandala' ? `
+        vec2 q=(p-.5)*2.0;
+        float r=length(q), a=atan(q.y,q.x);
+        float rings=exp(-abs(r-.82)*170.0)+exp(-abs(r-.68)*150.0);
+        float runes=step(.42,sin(a*24.0+t*.8))*smoothstep(.70,.73,r)*(1.0-smoothstep(.78,.80,r));
+        float star=exp(-abs(r-(.41+.12*cos(a*6.0-t*.45)))*100.0);
+        shape=(rings+runes+star)*(1.0-smoothstep(.92,1.0,r));
+      ` : kind === 'storm' ? `
+        float segment=floor(p.y*12.0+t*7.0);
+        float kink=(inkHash(vec2(segment,floor(t*8.0)))-.5)*.3;
+        float bolt=abs(p.x-.5-kink);
+        shape=(exp(-bolt*150.0)+.28*exp(-bolt*24.0))*pow(max(0.0,sin(p.y*3.14159)),.4);
+      ` : kind === 'nova' ? `
+        vec2 q=(p-.5)*2.0;
+        float r=length(q), a=atan(q.y,q.x);
+        float swirl=inkFbm(vec2(a*2.0-r*7.0+t*1.5,r*5.0-t*.8));
+        shape=(1.0-smoothstep(.25,1.0,r))*(.3+.7*smoothstep(.2,.72,swirl));
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.0,.94,.82),pow(max(0.0,1.0-r),3.0));
+      ` : kind === 'ward' ? `
         vec2 cells=p*vec2(16.0,8.0), cell=floor(cells), local=fract(cells);
         float first=3.0,second=3.0;
         for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++) {
@@ -84,7 +102,7 @@ export function spellMaterial(kind: SpellSurface, opacity = 1): MeshBasicMateria
       #include <alphatest_fragment>
     `);
   };
-  material.customProgramCacheKey = () => `aether-${kind}-${!!material.map}-v3`;
+  material.customProgramCacheKey = () => `aether-${kind}-${!!material.map}-v4`;
   return material;
 }
 

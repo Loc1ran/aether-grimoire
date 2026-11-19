@@ -45,9 +45,9 @@ export class SignatureVFX {
   // Sky Lightning state
   private lightningLife=0;
   private readonly lightningBolt: Group=new Group();
-  private readonly lightningCoreMat=new MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:AdditiveBlending});
-  private readonly lightningAuraMat=new MeshBasicMaterial({color:0x70bbff,transparent:true,opacity:0,blending:AdditiveBlending});
-  private readonly lightningRingMat=new MeshBasicMaterial({color:0x99ddff,transparent:true,opacity:0,blending:AdditiveBlending,side:DoubleSide});
+  private readonly lightningCoreMat=new MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:AdditiveBlending,depthWrite:false,toneMapped:false});
+  private readonly lightningAuraMat=new MeshBasicMaterial({color:0x70bbff,transparent:true,opacity:0,blending:AdditiveBlending,depthWrite:false,toneMapped:false});
+  private readonly lightningRingMat=new MeshBasicMaterial({color:0x99ddff,transparent:true,opacity:0,blending:AdditiveBlending,side:DoubleSide,depthWrite:false,toneMapped:false});
   private readonly lightningRing: Mesh;
 
   constructor() {
@@ -55,7 +55,7 @@ export class SignatureVFX {
     for(let n=0;n<4;n++) {
       const cut=new Group();cut.name=`DimensionFracture${n}`;cut.visible=false;
       for(let i=0;i<3;i++) {
-        const material=this.material(i===0?0xb98c67:i===1?0x090b0e:0xd6d7cf,'rift');
+        const material=this.material(i===0?0xab67ff:i===1?0x090b0e:0xead7ff,'rift');
         if(i===1)material.blending=NormalBlending;
         const layer=new Mesh(this.card,material);layer.name=i===1?'BlackSpatialCut':'FractureEdge';
         layer.position.z=-i*.003;cut.add(layer);
@@ -72,7 +72,7 @@ export class SignatureVFX {
     }
     geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();this.geometries.push(geometry);
     for(let i=0;i<4;i++) {
-      const wind=new Mesh(geometry,this.material(i===0?0x727973:0xbfc5bf,'ribbon'));
+      const wind=new Mesh(geometry,this.material(i===0?0x39cba7:0xa1ffe5,'ribbon'));
       wind.name=`HelicalWindSheet${i}`;wind.rotation.y=i*Math.PI/2;wind.scale.setScalar(1-i*.09);this.vortex.add(wind);
     }
     this.vortex.add(this.cyclone.mesh);
@@ -91,9 +91,9 @@ export class SignatureVFX {
     // Build Earth Spikes
     this.spikesRoot.name='EarthSpikes';this.root.add(this.spikesRoot);
     const outerGeo=new CylinderGeometry(0.02,0.24,1.8,5);outerGeo.translate(0,0.9,0);this.geometries.push(outerGeo);
-    const innerGeo=new CylinderGeometry(0.012,0.18,1.7,5);innerGeo.translate(0,0.85,0);this.geometries.push(innerGeo);
+    const innerGeo=new CylinderGeometry(0.025,0.25,1.82,5);innerGeo.translate(0,0.91,0);this.geometries.push(innerGeo);
     const spikeSteelMat=new MeshStandardMaterial({color:0x15181e,roughness:0.36,metalness:0.75});
-    const spikeRuneMat=new MeshBasicMaterial({color:0xff6b2b,transparent:true,opacity:0.85,blending:AdditiveBlending});
+    const spikeRuneMat=new MeshBasicMaterial({color:0xff9b38,transparent:true,opacity:0.85,blending:AdditiveBlending,wireframe:true,depthWrite:false,toneMapped:false});
     this.materials.push(spikeSteelMat,spikeRuneMat);
     for(let i=0;i<8;i++) {
       const group=new Group();group.name=`ObsidianSpike${i}`;group.visible=false;
@@ -113,9 +113,12 @@ export class SignatureVFX {
     const coreMesh=new Mesh(lightningGeo,this.lightningCoreMat);coreMesh.name='LightningCore';
     const auraMesh=new Mesh(lightningGeo,this.lightningAuraMat);auraMesh.name='LightningAura';auraMesh.scale.set(1.4,1,1.4);
     this.lightningBolt.add(coreMesh,auraMesh);
-    const ringGeo=new RingGeometry(0.04,1.6,32);ringGeo.rotateX(-Math.PI/2);this.geometries.push(ringGeo);
+    const ringGeo=new RingGeometry(1.45,1.6,64);ringGeo.rotateX(-Math.PI/2);this.geometries.push(ringGeo);
     this.lightningRing=new Mesh(ringGeo,this.lightningRingMat);this.lightningRing.position.y=0.02;this.lightningRing.name='ThunderShockwaveRing';
     this.lightningRoot.add(this.lightningBolt,this.lightningRing);
+    const seal=new Mesh(this.card,this.material(0x6aaaff,'mandala'));
+    seal.name='HeavenJudgementSeal';seal.rotation.x=-Math.PI/2;seal.scale.setScalar(2.5);seal.position.y=.025;
+    this.lightningRoot.add(seal);
     this.materials.push(this.lightningCoreMat,this.lightningAuraMat,this.lightningRingMat);
   }
 
@@ -159,7 +162,7 @@ export class SignatureVFX {
     return geo;
   }
 
-  private material(color:number,kind:'rift'|'ribbon'|'sigil'):MeshBasicMaterial {
+  private material(color:number,kind:'rift'|'ribbon'|'sigil'|'mandala'):MeshBasicMaterial {
     const material=spellMaterial(kind);material.color.setHex(color);this.materials.push(material);return material;
   }
   setView(rotation:Quaternion):void { this.view.copy(rotation); }
@@ -189,8 +192,10 @@ export class SignatureVFX {
 
   triggerLightning(target:Vector3):void {
     this.lightningRoot.position.set(target.x,0,target.z);
-    this.lightningLife=0.45;
+    this.lightningLife=1.05;
     this.lightningRoot.visible=true;
+    this.lightningCoreMat.opacity=this.lightningAuraMat.opacity=this.lightningRingMat.opacity=0;
+    this.lightningBolt.rotation.y=0;
     this.lightningRing.scale.setScalar(0.1);
   }
 
@@ -209,7 +214,7 @@ export class SignatureVFX {
     this.dividerSmoke.commit();
   }
   update(dt:number,vortexTime:number,center:Vector3):void {
-    this.time+=dt;for(const material of this.materials)if('uniforms' in material)clockSpell(material as any,this.time);
+    this.time+=dt;for(const material of this.materials)if(material instanceof MeshBasicMaterial)clockSpell(material,this.time);
 
     // Update Earth Spikes
     if(this.spikesActive) {
@@ -226,10 +231,6 @@ export class SignatureVFX {
           const p=t/0.11;
           const rise=Math.sin(p*Math.PI*0.5);
           spike.root.position.y=-1.85*(1-rise);
-          // Dust emission at burst
-          this.spikesSmoke.particle(i*3,spike.origin.x,0.08,spike.origin.z,0.35+p*0.4,i+t,0.32*(1-p));
-          this.spikesSmoke.particle(i*3+1,spike.origin.x+0.12,0.12,spike.origin.z,0.4+p*0.3,i+t+0.5,0.28*(1-p));
-          this.spikesSmoke.particle(i*3+2,spike.origin.x-0.12,0.06,spike.origin.z+0.1,0.3+p*0.5,i+t+0.9,0.3*(1-p));
         } else if(t<=0.85) {
           anyActive=true;
           spike.root.position.y=Math.sin(t*45)*0.008;
@@ -241,6 +242,8 @@ export class SignatureVFX {
         } else {
           spike.active=false;spike.root.visible=false;
         }
+        const dust=Math.max(0,1-t/.65);
+        for(let n=0;n<3;n++)this.spikesSmoke.particle(i*3+n,spike.origin.x+(n-1)*.12,.08+t*.18,spike.origin.z+n*.05,.3+t*.6,i+n+t,dust*.3);
       }
       this.spikesSmoke.commit();
       if(!anyActive)this.spikesActive=false;
@@ -249,13 +252,17 @@ export class SignatureVFX {
     // Update Sky Lightning
     if(this.lightningLife>0) {
       this.lightningLife=Math.max(0,this.lightningLife-dt);
-      const ratio=this.lightningLife/0.45;
-      const strobe=Math.sin(this.lightningLife*75)>0?1:0.35;
-      this.lightningCoreMat.opacity=ratio*strobe;
-      this.lightningAuraMat.opacity=ratio*0.75*strobe;
-      const ringScale=(1-ratio)*2.2;
+      const age=1.05-this.lightningLife, ratio=this.lightningLife/1.05;
+      const strike=Math.exp(-age*9)+.65*Math.exp(-Math.pow((age-.24)*13,2));
+      this.lightningCoreMat.opacity=strike;
+      this.lightningAuraMat.opacity=strike*.65;
+      this.lightningBolt.rotation.y=Math.sin(age*12)*.22;
+      this.lightningBolt.scale.set(1+Math.sin(age*18)*.12,1,1+Math.cos(age*16)*.12);
+      const ringScale=age*2.2;
       this.lightningRing.scale.setScalar(Math.max(0.1,ringScale));
       this.lightningRingMat.opacity=ratio*0.85;
+      const seal=this.lightningRoot.children[2] as Mesh<BufferGeometry,MeshBasicMaterial>;
+      seal.material.opacity=ratio*.75;seal.rotation.z=age*.7;
       if(this.lightningLife<=0)this.lightningRoot.visible=false;
     }
 
@@ -284,7 +291,7 @@ export class SignatureVFX {
     for(let i=0;i<this.vortex.children.length;i++) {
       if(this.vortex.children[i]===this.cyclone.mesh)continue;
       const layer=this.vortex.children[i] as Mesh<BufferGeometry,MeshBasicMaterial>;
-      layer.material.opacity=fade*(i<4?.10:.8);
+      layer.material.opacity=fade*(i<4?.36:.8);
       if(i<4)layer.rotation.y=this.time*(2.5+i*.3)+i*Math.PI/2;
       else {const t=(this.time*.45+i*.173)%1,a=this.time*4+i*2.399,r=.22+t*.45;layer.position.set(Math.cos(a)*r,t*1.6,Math.sin(a)*r);layer.rotation.set(a,t*5,a*.5);}
     }
@@ -299,6 +306,9 @@ export class SignatureVFX {
     for(const cut of this.cuts){cut.life=0;cut.root.visible=false;}
     for(const spike of this.earthSpikes){spike.active=false;spike.root.visible=false;}
     this.lightningLife=0;this.lightningRoot.visible=false;
+    this.spikesActive=false;this.spikesAge=0;
+    for(let i=0;i<28;i++)this.spikesSmoke.particle(i,0,0,0,0,0,0);
+    this.spikesSmoke.commit();
     this.vortex.visible=this.divider.visible=false;
   }
   dispose():void {

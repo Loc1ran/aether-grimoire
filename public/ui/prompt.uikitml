@@ -12,7 +12,7 @@
 </style>
 <div id="training-panel" class="root">
   <span class="eyebrow">AETHER / THE SPELLWRIGHT'S TRIAL</span>
-  <span id="title" class="title">The Umbral Codex</span>
+  <span id="title" class="title">The Umbral Grimoire</span>
   <span id="body" class="body">Raise a hand near your chest. Pinch, hold, then pull upward to summon.</span>
   <span id="status" class="status">DORMANT / MANA 100</span>
   <span id="boss" class="status">OBSIDIAN WARDEN / Start trial</span>
